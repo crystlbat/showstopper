@@ -2827,11 +2827,18 @@ function blankScene(name) {
 }
 /* a scene that teaches Tapline through its own content — no audio needed,
    its cuts, tracks and notes are the walkthrough */
+/* The walkthrough is one canned project, not a new one per install. Every id
+   in it is fixed, so two devices that each seed it produce byte-identical
+   scenes that merge into a single card. Minting fresh ids left one copy per
+   device in the library, identically named and impossible to tell apart —
+   and the Tutorial button stacked another on every press. */
+const TUT_ID = 'tapline-tutorial';
 function tutorialScene() {
   const marks = [0, 8, 18, 30, 42, 54];
-  const note = (s, e, text) => ({ id: uid(), s, e, text });
+  let nth = 0;
+  const note = (s, e, text) => ({ id: TUT_ID + '-n' + (++nth), s, e, text });
   const guide = {
-    id: uid(), key: uid(), name: 'Start here', color: PALETTE[0], vibe: 0,
+    id: TUT_ID + '-t1', key: TUT_ID + '-t1', name: 'Start here', color: PALETTE[0], vibe: 0,
     blocks: [
       note(0, 8, "Welcome — this is a demo scene, no real audio attached, just a guided tour."),
       note(8, 18, "The diamonds on the ruler above are cuts — they mark where a song changes. Tap the timeline in capture mode to drop your own."),
@@ -2841,17 +2848,17 @@ function tutorialScene() {
     ]
   };
   const tryit = {
-    id: uid(), key: uid(), name: 'Try it yourself', color: PALETTE[1], vibe: 1,
+    id: TUT_ID + '-t2', key: TUT_ID + '-t2', name: 'Try it yourself', color: PALETTE[1], vibe: 1,
     blocks: [
       note(8, 18, "Click an empty stretch of this row, then just start typing — it opens a note right where you clicked."),
       note(30, 42, "Notes can snap to the whole section or pin to a single cut — toggle \"snap\" in the note bar while typing."),
     ]
   };
   return {
-    id: uid(), name: 'Start here — how Tapline works', updated: Date.now(),
+    id: TUT_ID, name: 'Start here — how Tapline works', updated: Date.now(),
     data: {
       markers: marks,
-      layers: [{ id: uid(), name: 'Layer 1', color: LAYER_COLORS[0], vis: true, tracks: [guide, tryit] }],
+      layers: [{ id: TUT_ID + '-l1', name: 'Layer 1', color: LAYER_COLORS[0], vis: true, tracks: [guide, tryit] }],
       active: 0, overlay: false, duration: 60, audioName: '', takeNum: 1
     }
   };
@@ -3111,6 +3118,22 @@ const sparkOf = sc => {
   for (let i = 0; i < 120; i++) out.push(m[Math.floor(i * step)]);
   return out;
 };
+/* A fork is only worth making if the version it protects is not already in
+   the library under some other id. Without this the two devices fork the
+   same disagreement from opposite sides — each preserving what the other
+   already preserved — and one conflict breeds copies on every exchange. */
+const bodyOf = s => JSON.stringify((s || {}).data);
+const heldElsewhere = (p, localScenes, incoming) =>
+  localScenes.some(o => o !== p && !o.deleted && bodyOf(o) === bodyOf(p)) ||
+  incoming.some(o => !o.deleted && bodyOf(o) === bodyOf(p));
+
+/* Two projects with one name are two projects you cannot tell apart in the
+   library, which is the whole value of keeping both. */
+const forkName = n => {
+  const s = String(n == null ? '' : n).trim() || 'Project';
+  return /\(received\)$/.test(s) ? s : s + ' (received)';
+};
+
 function mergeScenes(localScenes, incoming, sinceSync) {
   const m = {}, forks = [], arrivals = [];
   localScenes.forEach(s => { m[s.id] = s; });
@@ -3129,9 +3152,16 @@ function mergeScenes(localScenes, incoming, sinceSync) {
        with the same notes in them, which is worse than no merge at all.
        Fork only when the two versions genuinely differ. */
     const reallyDiffers = JSON.stringify(p.data) !== JSON.stringify(s.data);
-    if (remoteNewer && localMovedToo && reallyDiffers && !p.deleted && !s.deleted) {
-      const fork = Object.assign({}, s, { id: uid() });
+    if (remoteNewer && localMovedToo && reallyDiffers && !p.deleted && !s.deleted
+        && !heldElsewhere(p, localScenes, incoming)) {
+      const fork = Object.assign({}, s, { id: uid(), name: forkName(s.name) });
       forks.push(fork); m[fork.id] = fork;
+      /* Keeping the local copy is not enough on its own: it is still the
+         older row of the two, so the very next exchange takes the remote as
+         a plain update and overwrites the work this fork exists to protect.
+         Outranking the remote makes the choice stick, and makes it the
+         version the other device receives. */
+      m[p.id] = Object.assign({}, p, { updated: Math.max(p.updated || 0, s.updated || 0) + 1 });
       arrivals.push({ kind: 'both', sceneId: p.id, forkId: fork.id, name: p.name,
         before: statsOf(p.data), after: statsOf(s.data), marks: sparkOf(s), dur: (s.data || {}).duration || 0 });
       return;                       /* local stays put; both survive */
@@ -4100,8 +4130,14 @@ $('#hScenes').onclick = () => go('library');
 $('#hContinue').onclick = () => go(P.markers.length ? workScreen() : 'capture');
 $('#scImport').onclick = () => $('#jsonIn').click();
 $('#scTutorial').onclick = () => {
+  /* one walkthrough, reopened — asking for it again is asking to read it,
+     not to own a second copy of it */
+  const open = lib.scenes.find(s => s.id === TUT_ID && !s.deleted);
+  if (open) { loadScene(open); renderScenes(); toast('Tutorial opened'); return; }
   const sc = tutorialScene();
-  lib.scenes.unshift(sc); claimMine(sc.id);
+  const gone = lib.scenes.findIndex(s => s.id === TUT_ID);
+  if (gone >= 0) lib.scenes[gone] = sc; else lib.scenes.unshift(sc);
+  claimMine(sc.id);
   store.set(LIBKEY, lib);
   loadScene(sc);
   renderScenes();
