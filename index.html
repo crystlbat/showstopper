@@ -2491,8 +2491,42 @@ function paintInboxBadges() {
 const IB_COPY = {
   new:     { tag: 'new', line: 'Wasn\u2019t on this device before.' },
   updated: { tag: 'updated', line: 'Your copy was behind \u2014 now up to date.' },
-  both:    { tag: 'needs a look', line: '<b>Yours is untouched.</b> Their copy is saved beside it.' }
+  both:    { tag: 'needs a look', line: '<b>Both versions are here.</b> Pick one and the other goes — on every device.' }
 };
+
+/* Closing a conflict, rather than only looking at it. Until this existed the
+   inbox could open either copy but never put the two back together, so the
+   pair sat in the library for good — which reads as the app having
+   duplicated the project. Whichever version is chosen keeps the original
+   project and its name; the copy that lost is tombstoned rather than quietly
+   dropped, so the other device removes it too instead of handing it back on
+   the next exchange. */
+function resolveFork(m, take) {
+  const mine = lib.scenes.find(s => s.id === m.sceneId);
+  const theirs = lib.scenes.find(s => s.id === m.forkId);
+  const drop = () => { inbox = inbox.filter(x => x.id !== m.id); saveInbox(); paintInbox(); paintInboxBadges(); };
+  if (!mine || mine.deleted || !theirs || theirs.deleted) { drop(); return toast('That project is no longer here'); }
+
+  commitP(curScene(), false);        /* whatever the editor holds, before it changes underneath */
+  const now = Date.now();
+  const past = s => Math.max(now, (s.updated || 0) + 1);
+  if (take === 'theirs') {
+    mine.data = JSON.parse(JSON.stringify(theirs.data));
+    logHist(mine.id, 'Used the copy that arrived');
+  } else {
+    logHist(mine.id, 'Kept this device’s copy');
+  }
+  mine.updated = Math.max(past(mine), past(theirs));
+  theirs.deleted = true; theirs.data = {}; theirs.updated = mine.updated;
+
+  drop();
+  store.set(LIBKEY, lib);
+  syncSoon();
+  closeInbox();
+  loadScene(mine);                   /* reloads P from whichever version won */
+  renderScenes();
+  toast(take === 'theirs' ? 'Updated with the copy that arrived' : 'Kept your version');
+}
 /* a row of ticks beats a sentence for "what does this timeline look like" —
    same trick the take-compare bars use */
 function cutSpark(marks, dur, color) {
@@ -2576,23 +2610,25 @@ function paintInbox() {
 
     const acts = el('div', 'ib-acts');
     const has = id => lib.scenes.some(s => s.id === id && !s.deleted);
-    const openBtn = el('button', 'btn key');
-    openBtn.textContent = m.kind === 'both' ? 'Open your version' : 'Open';
-    openBtn.onclick = () => {
-      const sc = lib.scenes.find(s => s.id === m.sceneId);
-      if (!sc || sc.deleted) return toast('That project is no longer here');
-      closeInbox(); loadScene(sc);
-    };
-    if (has(m.sceneId)) acts.appendChild(openBtn);
-    if (m.kind === 'both' && has(m.forkId)) {
-      const otherBtn = el('button', 'btn');
-      otherBtn.textContent = 'Open the one that arrived';
-      otherBtn.onclick = () => {
-        const sc = lib.scenes.find(s => s.id === m.forkId);
-        if (!sc || sc.deleted) return toast('That copy is no longer here');
+    if (m.kind === 'both' && has(m.sceneId) && has(m.forkId)) {
+      /* two projects in the library is the problem, not the offer — these
+         choose, and leave one. Dismiss still means "decide later". */
+      const takeBtn = el('button', 'btn key');
+      takeBtn.textContent = 'Use the one that arrived';
+      takeBtn.onclick = () => resolveFork(m, 'theirs');
+      const keepBtn = el('button', 'btn');
+      keepBtn.textContent = 'Keep mine';
+      keepBtn.onclick = () => resolveFork(m, 'mine');
+      acts.append(takeBtn, keepBtn);
+    } else if (has(m.sceneId)) {
+      const openBtn = el('button', 'btn key');
+      openBtn.textContent = 'Open';
+      openBtn.onclick = () => {
+        const sc = lib.scenes.find(s => s.id === m.sceneId);
+        if (!sc || sc.deleted) return toast('That project is no longer here');
         closeInbox(); loadScene(sc);
       };
-      acts.appendChild(otherBtn);
+      acts.appendChild(openBtn);
     }
     const del = el('button', 'btn ghost'); del.textContent = 'Dismiss';
     del.onclick = () => { inbox = inbox.filter(x => x.id !== m.id); saveInbox(); paintInbox(); paintInboxBadges(); };
@@ -4754,6 +4790,14 @@ function migrate(o) {
   o.markers = o.timelines[o.activeTL].marks;
   if (typeof o.ytId !== 'string') o.ytId = '';
   if (typeof o.ytTitle !== 'string') o.ytTitle = '';
+  /* loadScene fills the editor with Object.assign(P, migrate(…)), which only
+     overwrites the keys that are actually present. Anything left undefined
+     here keeps the previously open project's value — opening one project and
+     seeing another's length on the ruler, or its audio name in the tag. */
+  if (typeof o.duration !== 'number' || !isFinite(o.duration))
+    o.duration = Math.max(o.markers[o.markers.length - 1] || 0, 60);
+  if (typeof o.audioName !== 'string') o.audioName = '';
+  if (typeof o.takeNum !== 'number') o.takeNum = 1;
   return o;
 }
 migrate(P);
