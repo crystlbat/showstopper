@@ -31,7 +31,27 @@ const meta = () => db().collection('meta');
 // so nothing already stored has to be rewritten to move across — see adopt().
 const scope = owner => (owner ? { owner } : { owner: { $exists: false } });
 
+// Every read filters on `owner`, and without an index that is a scan of the
+// whole collection — every account's projects, on every request, including
+// the one write() runs internally. Cost per request would grow with how much
+// is stored rather than with how much is being saved. Parked on the global
+// alongside the client so a warm container does this once; createIndex is
+// idempotent, so the cold-start cost is one no-op command per container.
+function indexed() {
+  if (!global._taplineIdx) {
+    global._taplineIdx = scenes().createIndex({ owner: 1 }).catch(function (e) {
+      // An index that cannot be built is not a reason to refuse to save. The
+      // rejection is swallowed rather than retried: re-attempting per request
+      // would be its own quiet cost, and a container is recycled often enough
+      // that a passing failure gets another go on the next cold start.
+      console.error('scenes.owner index:', (e && e.message) || e);
+    });
+  }
+  return global._taplineIdx;
+}
+
 async function read(owner) {
+  await indexed();
   const docs = await scenes().find(scope(owner)).toArray();
   return docs.map(function (d) {
     const s = Object.assign({}, d, { id: d._id });
@@ -49,7 +69,15 @@ async function write(owner, incoming) {
   (incoming || []).forEach(function (s) {
     if (!s || !s.id) return;
     const p = have[s.id];
-    if (p && (p.updated || 0) > (s.updated || 0)) return;   // what we hold is newer
+    // Every save carries the whole library, so most of what arrives is
+    // byte-for-byte what is already stored. `>` let those through — equal
+    // timestamps are not "newer", but they are not older either — and each
+    // one cost a document write, making a save as expensive as the library
+    // is long rather than as long as the edit was. `>=` skips them. A change
+    // always arrives strictly newer, because save() restamps through
+    // commitP(sc, true); two edits inside one millisecond are carried by the
+    // next save. The app's own mergeScenes treats equal the same way.
+    if (p && (p.updated || 0) >= (s.updated || 0)) return;   // what we hold is newer, or the same
     have[s.id] = s;
     const doc = Object.assign({}, s);
     delete doc.id;

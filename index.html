@@ -3503,6 +3503,20 @@ let cloud = {
   local: false      /* chose to carry on without an account */
 };
 let cloudTimer = 0, cloudGen = 0, cloudMode = 'in';   /* the auth card: sign in or join */
+/* How many times running the save has come back failed. A retry that never
+   widens and never gives up is the one thing here that costs real money
+   while nobody is watching: the reply is quiet, so a tab left open on a
+   broken save would hammer the endpoint every 15s until the lid closed. */
+let cloudFails = 0, cloudStuck = false;
+const CLOUD_RETRY_MAX = 5 * 60000;
+/* 413 and 400 describe the request, not the weather — sending it again
+   cannot change the answer, so the retry stops and the widget says so. */
+const cloudTerminal = status => status === 413 || status === 400;
+/* One schedule for both the retry and the next edit's save, or an outage
+   plus a fast typist would slip past the backoff one keystroke at a time. */
+const cloudWait = () => cloudFails
+  ? Math.min(15000 * Math.pow(2, cloudFails - 1), CLOUD_RETRY_MAX)
+  : 1400;
 
 /* Remembered so a return visit shows the right front door immediately
    instead of flashing the wrong one for a round trip. */
@@ -3730,6 +3744,8 @@ async function cloudPull(quiet) {
 async function cloudSave(opts) {
   opts = opts || {};
   if (!cloud.on || !cloud.user) return false;
+  /* asking for it by hand is a fresh start: drop the backoff and try now */
+  if (!opts.quiet) { cloudFails = 0; cloudStuck = false; }
   if (cloud.busy) { dirty = true; return false; }
   clearTimeout(cloudTimer); cloudTimer = 0;
   cloud.busy = true; paintCloud();
@@ -3744,10 +3760,10 @@ async function cloudSave(opts) {
     const r = await api('/state', { method: 'POST', body });
 
     if (r.status === 401) return cloudSignedOut('Your session ran out. Sign in again.');
-    if (!r.ok) throw new Error(r.data.error || ('http ' + r.status));
+    if (!r.ok) { const err = new Error(r.data.error || ('http ' + r.status)); err.status = r.status; throw err; }
 
     const res = absorbScenes(r.data.scenes, cloud.last);
-    cloud.last = Date.now(); cloud.lastPull = Date.now(); cloud.err = '';
+    cloud.last = Date.now(); cloud.lastPull = Date.now(); cloud.err = ''; cloudFails = 0;
     if (gen === cloudGen) dirty = false;
     saveCloud();
     slog('ok', 'saved in ' + (Date.now() - t0) + 'ms',
@@ -3756,21 +3772,34 @@ async function cloudSave(opts) {
     else if (!opts.quiet) flashSaved();
     return true;
   } catch (e) {
-    cloud.err = cloudWhy(e);
-    slog('err', 'save did not go through', cloud.err);
-    if (!opts.quiet) toast('not saved · ' + cloud.err);
+    cloudFails++;
+    cloudStuck = cloudTerminal(e.status);
+    cloud.err = cloudStuck ? cloudWhyStuck(e) : cloudWhy(e);
+    slog('err', 'save did not go through', cloud.err +
+      (cloudStuck ? ' — not retrying' : ' — attempt ' + cloudFails));
+    if (!opts.quiet || cloudStuck) toast('not saved · ' + cloud.err);
     return false;
   } finally {
     cloud.busy = false;
-    /* whatever happened, work that is still unsaved gets another go rather
-       than waiting for the user to happen to type something */
-    if (dirty && !cloudTimer && cloud.user) cloudTimer = setTimeout(() => cloudSave({ quiet: true }), cloud.err ? 15000 : 1400);
+    /* Work that is still unsaved gets another go rather than waiting for the
+       user to happen to type something — but each failure in a row waits
+       longer, up to a ceiling, and a request the server has already refused
+       on its own terms is not sent again at all. Without both, a tab left
+       open on a broken save is a request every 15s, forever, in silence. */
+    if (dirty && !cloudTimer && cloud.user && !cloudStuck) {
+      cloudTimer = setTimeout(() => cloudSave({ quiet: true }), cloudWait());
+    }
     paintCloud();
   }
 }
 
 /* fetch() rejects with the same bare message for offline, a cold function
    and a dead one alike, so say which one it actually was. */
+/* A refusal about the request itself needs to read as "and it will stay
+   refused until you change something", not as a hiccup worth waiting out. */
+const cloudWhyStuck = e => String((e && e.message) || e) +
+  (e && e.status === 413 ? ' — remove a project, then edit again to retry' : '');
+
 function cloudWhy(e) {
   const m = String((e && e.message) || e);
   if (/abort/i.test(m)) return 'the server took too long';
@@ -3783,9 +3812,13 @@ function cloudWhy(e) {
 function cloudSoon() {
   if (!cloud.on || !cloud.user) return;
   dirty = true; cloudGen++;
+  /* a refusal the server made about the request itself can be undone by
+     changing the request — deleting a project, say — so an edit earns one
+     more attempt, on the backoff rather than straight away */
+  cloudStuck = false;
   paintCloud();
   clearTimeout(cloudTimer);
-  cloudTimer = setTimeout(() => cloudSave({ quiet: true }), 1400);
+  cloudTimer = setTimeout(() => cloudSave({ quiet: true }), cloudWait());
 }
 
 /* A tab being closed mid-edit is the one moment a debounce cannot survive,
