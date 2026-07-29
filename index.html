@@ -34,7 +34,11 @@
   --barpad:16px;          /* the left inset every top bar shares */
   --lane-h:92px;
   --grp-h:32px;
-  --ruler-h:104px;
+  /* the ruler grew by the scrub band rather than giving up room to it, so the
+     cut numerals and segment labels sit exactly where they always did */
+  --scrub-h:30px;
+  --knob:15px;
+  --ruler-h:134px;
   --side-w:192px;
   --bar:52px;
 }
@@ -313,7 +317,16 @@ body:not(.editing) .drop .edit-only{display:none}
 /* stands in for .tl-strip on the scroller side: without it every track
    header sat above its own lane by the height of the timeline strip */
 .side-strip{border-bottom:1px solid var(--line);background:rgba(0,0,0,.16)}
-.side-top{height:var(--ruler-h);border-bottom:1px solid var(--line);display:flex;flex-direction:column;justify-content:center;padding:0 16px;gap:6px}
+.side-top{
+  height:var(--ruler-h);border-bottom:1px solid var(--line);display:flex;flex-direction:column;
+  justify-content:center;padding:0 16px;gap:6px;position:relative;
+}
+/* names the band in the gutter beside it, or a new empty lane is a mystery */
+.side-scrub{
+  position:absolute;left:0;right:0;bottom:0;height:var(--scrub-h);
+  display:flex;align-items:center;padding:0 16px;border-top:1px solid var(--line);
+  font-family:var(--ui);font-size:8.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--faint);
+}
 .side-top .lbl{font-family:var(--ui);font-size:9px;letter-spacing:.26em;text-transform:uppercase;color:var(--faint)}
 .side-top .val{font-family:var(--mono);font-size:22px;color:var(--text)}
 .scroller{flex:1;overflow-x:auto;overflow-y:hidden;position:relative}
@@ -331,9 +344,51 @@ body:not(.editing) .drop .edit-only{display:none}
   color:var(--dim);letter-spacing:.02em;
 }
 .seg{
-  position:absolute;bottom:12px;height:30px;display:flex;align-items:center;gap:10px;
+  position:absolute;bottom:var(--scrub-h);height:30px;display:flex;align-items:center;gap:10px;
   padding:0 2px 0 10px;overflow:hidden;font-family:var(--ui);font-size:10px;color:var(--faint);
   border-left:1px solid var(--line2);letter-spacing:.08em;
+}
+
+/* ── scrub band: somewhere safe to drag the playhead ──
+   Seeking used to mean tapping the ruler or catching the playhead's own
+   arrow, both of which sit among the cut diamonds — so reaching for the
+   playhead while listening kept grabbing a cut and dragging it instead. This
+   is a lane of its own, the full width of the timeline, with nothing else in
+   it to hit. Its notches are the cuts, and the drag is magnetised to them. */
+.scrub{
+  position:absolute;left:0;right:0;bottom:0;height:var(--scrub-h);z-index:6;
+  cursor:ew-resize;touch-action:none;
+  background:linear-gradient(180deg,rgba(255,255,255,.012),rgba(255,255,255,.05));
+  border-top:1px solid var(--line);
+}
+.scrub:hover{background:linear-gradient(180deg,rgba(255,255,255,.03),rgba(255,255,255,.08))}
+.scrub-rail{
+  position:absolute;left:0;right:0;top:50%;height:2px;margin-top:-1px;border-radius:2px;
+  background:rgba(255,255,255,.10);pointer-events:none;
+}
+/* a cut, seen from inside the band — what the drag will stick to */
+.scrub-notch{
+  position:absolute;top:50%;width:2px;height:11px;margin:-5.5px 0 0 -1px;border-radius:2px;
+  background:rgba(143,166,255,.55);pointer-events:none;transition:.15s;
+}
+.scrub-knob{
+  position:absolute;top:50%;left:0;width:var(--knob);height:var(--knob);margin-top:calc(var(--knob) / -2);
+  margin-left:calc(var(--knob) / -2);border-radius:50%;background:var(--play);
+  box-shadow:0 0 0 4px rgba(217,143,196,.16),0 2px 10px rgba(0,0,0,.5);
+  pointer-events:none;transition:box-shadow .15s,transform .12s;
+}
+.scrub:hover .scrub-knob{transform:scale(1.12)}
+.scrub.drag{background:linear-gradient(180deg,rgba(255,255,255,.04),rgba(255,255,255,.10))}
+.scrub.drag .scrub-knob{transform:scale(1.22)}
+/* held by a cut — say so, or magnetism just feels like drift */
+.scrub.mag .scrub-knob{
+  background:var(--cut);
+  box-shadow:0 0 0 5px rgba(143,166,255,.26),0 2px 10px rgba(0,0,0,.5);
+}
+body.live .scrub-knob{background:var(--live)}
+@media (prefers-reduced-motion:reduce){
+  .scrub-knob,.scrub-notch{transition:none}
+  .scrub:hover .scrub-knob,.scrub.drag .scrub-knob{transform:none}
 }
 .seg .n{font-family:var(--mono);color:var(--cut);font-size:11px;font-weight:600}
 .seg.narrow{padding-left:6px;gap:0}
@@ -1277,13 +1332,15 @@ button{touch-action:manipulation;-webkit-tap-highlight-color:transparent}
 }
 @media (max-width:1180px){:root{--side-w:176px}}
 @media (max-width:900px){
-  :root{--side-w:158px;--ruler-h:96px;--barpad:12px}
+  :root{--side-w:158px;--scrub-h:34px;--knob:17px;--ruler-h:130px;--barpad:12px}
   #audioName{display:none}
   #toolbar,#layerbar{gap:8px}
   .cap-idle h1{font-size:clamp(26px,6.4vw,44px)}
 }
 @media (max-height:560px){
-  :root{--ruler-h:88px;--lane-h:78px;--bar:46px}
+  /* short screen: the band gives up a little, but never so much that it stops
+     being the easiest thing in the ruler to hit */
+  :root{--scrub-h:26px;--knob:14px;--ruler-h:114px;--lane-h:78px;--bar:46px}
   .clock{font-size:clamp(32px,7vw,54px)}
   .cap-idle h1{font-size:clamp(22px,4.6vw,32px);margin-bottom:10px}
   .cap-idle p{font-size:13.5px}
@@ -1408,6 +1465,7 @@ button{touch-action:manipulation;-webkit-tap-highlight-color:transparent}
         <div class="side-top">
           <div class="lbl">cuts</div>
           <div class="val" id="cutCount">0</div>
+          <div class="side-scrub">drag to seek</div>
         </div>
         <div class="side-strip" id="sideStrip"></div>
         <div id="heads"></div>
@@ -1416,7 +1474,7 @@ button{touch-action:manipulation;-webkit-tap-highlight-color:transparent}
       <div class="scroller" id="scroller">
         <div class="inner" id="inner">
           <div class="seghi" id="seghi"></div>
-          <div class="ruler" id="ruler"><canvas id="wave"></canvas></div>
+          <div class="ruler" id="ruler"><canvas id="wave"></canvas><div class="scrub" id="scrub"><div class="scrub-rail"></div><div class="scrub-knob" id="scrubKnob"></div></div></div>
           <div class="tl-strip" id="tlStrip"></div>
           <div class="lanes" id="lanes"></div>
           <div class="playhead" id="playhead"><div class="trail"></div><div class="beam"></div><div class="phdot"></div></div>
@@ -1826,6 +1884,7 @@ let mode = 'idle';        // idle | rec | edit
 let zoom = 1, basePps = 6;
 let sel = null;           // selected block element
 let selMarker = -1;       // selected cut
+let knobR = 7.5;          // half the scrub knob, remeasured on render
 let phSel = false;        // playhead selected
 let phOff = false;        // playhead dismissed
 let cancelDraw = null;    // abort an in-progress lane drag
@@ -5057,6 +5116,8 @@ function render() {
   $('#peek').classList.remove('on');
   const w = Math.max(t2x(P.duration), 200);
   $('#inner').style.width = w + 'px';
+  /* measured here, once, so updatePos can clamp the knob without a layout */
+  const kn = $('#scrubKnob'); if (kn) knobR = (kn.offsetWidth || 15) / 2;
   $('#cutCount').textContent = P.markers.length;
   renderTLBar(); renderTLStrip();
   renderLayerBar();
@@ -5076,6 +5137,14 @@ function render() {
     const len = el('span'); len.textContent = (e0 - s0).toFixed(1) + 's';
     if (t2x(e0 - s0) < 104) sg.classList.add('narrow');
     sg.append(n, len); ruler.appendChild(sg);
+  });
+  /* the same cuts again, down in the scrub band, so what the drag sticks to
+     is visible from inside the lane you are dragging in */
+  const scrub = $('#scrub');
+  scrub.querySelectorAll('.scrub-notch').forEach(n => n.remove());
+  P.markers.forEach(t => {
+    const n = el('div', 'scrub-notch'); n.style.left = t2x(t) + 'px';
+    scrub.appendChild(n);
   });
   P.markers.forEach((t, i) => {
     const mk = el('div', 'marker'); mk.style.left = t2x(t) + 'px';
@@ -5430,10 +5499,58 @@ $('#ruler').addEventListener('dblclick', e => {
   const t = x2t(e.clientX - r.left);
   P.markers.push(t); P.markers.sort((a, b) => a - b); recalc(); render(); save();
 });
+/* ── the scrub band ───────────────────────────────────
+   Dragging here moves the playhead and nothing else, which is the point: the
+   cut diamonds live at the top of the ruler and are no longer in the way of
+   a hand reaching for the playhead mid-listen.
+
+   Magnetism reuses snap() — the same 12px pull, against the same cut times,
+   that moving a block already obeys — so "near a cut" means one thing
+   everywhere. Hold Alt to place the playhead between cuts. */
+let scrubbing = null;
+function scrubAt(clientX, alt) {
+  const r = $('#ruler').getBoundingClientRect();
+  const raw = clamp(x2t(clientX - r.left), 0, P.duration);
+  const t = alt ? raw : snap(raw);
+  $('#scrub').classList.toggle('mag', Math.abs(t - raw) > 1e-9);
+  setPh(false);
+  playPos = t; lastPos = t;
+  updatePos();
+  /* Seeking the player on every pointermove is one request per frame — and
+     YouTube's seekTo is a network call. Move the line at full rate, move the
+     audio at a rate an ear cannot tell apart from it. */
+  const now = performance.now();
+  if (hasClock() && now - scrubbing.seekedAt > 70) { srcSeek(t); scrubbing.seekedAt = now; }
+}
+$('#scrub').addEventListener('pointerdown', e => {
+  if (e.button === 2 || pinching) return;
+  e.preventDefault(); e.stopPropagation();
+  scrubbing = { id: e.pointerId, seekedAt: 0 };
+  $('#scrub').classList.add('drag');
+  try { $('#scrub').setPointerCapture(e.pointerId); } catch (err) {}
+  scrubAt(e.clientX, e.altKey);
+});
+$('#scrub').addEventListener('pointermove', e => {
+  if (!scrubbing || e.pointerId !== scrubbing.id) return;
+  scrubAt(e.clientX, e.altKey);
+});
+const scrubEnd = e => {
+  if (!scrubbing || (e && e.pointerId !== scrubbing.id)) return;
+  scrubbing = null;
+  $('#scrub').classList.remove('drag', 'mag');
+  /* land the player exactly where the line ended up, whatever the throttle
+     happened to skip on the way */
+  if (hasClock()) srcSeek(playPos);
+};
+$('#scrub').addEventListener('pointerup', scrubEnd);
+$('#scrub').addEventListener('pointercancel', scrubEnd);
+/* the band is for seeking only — a double-click here must not drop a cut */
+$('#scrub').addEventListener('dblclick', e => e.stopPropagation());
+
 /* a tap on the ruler seeks; a drag pans the timeline instead */
 let rulerDown = null;
 $('#ruler').addEventListener('pointerdown', e => {
-  if (e.target.closest('.marker')) return;
+  if (e.target.closest('.marker') || e.target.closest('.scrub')) return;
   rulerDown = { x: e.clientX, y: e.clientY };
 });
 addEventListener('pointerup', e => {
@@ -5548,7 +5665,9 @@ async function loadAudio(f) {
 
 function drawWave() {
   const c = $('#wave'), sc = $('#scroller');
-  const w = sc.clientWidth, h = $('#ruler').clientHeight;
+  /* the waveform belongs above the scrub band, not behind it */
+  const band = $('#scrub') ? $('#scrub').offsetHeight : 0;
+  const w = sc.clientWidth, h = Math.max($('#ruler').clientHeight - band, 20);
   const d = Math.min(devicePixelRatio || 1, 2);
   c.style.width = w + 'px'; c.style.height = h + 'px';
   c.style.transform = 'translateX(' + sc.scrollLeft + 'px)';
@@ -5672,6 +5791,15 @@ $('#audioName').onclick = () => { if ($('#audioName').classList.contains('need')
 function updatePos() {
   const ph = $('#playhead');
   if (ph) ph.style.left = t2x(playPos) + 'px';
+  const knob = $('#scrubKnob');
+  if (knob) {
+    /* The ruler clips, so hold the whole knob inside it at either end rather
+       than showing half a circle at 0:00. Arithmetic only — this runs every
+       frame while playing, and reading offsetWidth here would be a layout
+       per frame. The beam above still marks the exact position. */
+    const lim = Math.max(t2x(P.duration), 200);
+    knob.style.left = clamp(t2x(playPos), knobR, Math.max(lim - knobR, knobR)) + 'px';
+  }
   growNote();
   $('#posLabel').textContent = fmt(playPos) + ' / ' + fmt(P.duration) + (hasClock() ? '' : ' · tap-time');
   for (const e of blockIndex) {
