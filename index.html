@@ -5921,123 +5921,207 @@ async function compressGzip(str) {
   return blob;
 }
 
+/* ═══ ableton (.als) export ═══════════════════════════
+   ALS_B64 is one real Live 12 set, gzipped: a single MIDI track holding a
+   single clip, and a single locator. The export clones those three fragments
+   — a track per lane on screen, a clip per block, a locator per cut — and
+   splices the clones back into the set's XML.
+
+   Two properties of that XML decide whether the result is a usable template
+   or a wall of defaults, and both bit the first version of this:
+
+   · Live writes empty elements as `<Tag Value="x" />`, with a space before
+     the slash. A pattern ending in `"/>` therefore matches NOTHING, and
+     String.replace fails silently — which is how every track shipped named
+     "layer 1", every locator "testing", and every clip sat at bar 1.
+   · A clip carries two clocks. CurrentStart/CurrentEnd place it on the
+     arrangement; the loop braces and every note time inside it are measured
+     from the clip's own zero. Writing arrangement beats into the loop braces
+     puts the note outside its own start marker, where nothing plays it. */
+
+/* Live's own colour indices, spread across its picker so consecutive tracks
+   land on visibly different hues. Any value in 0…69 is valid. */
+const ALS_COLORS = [0, 6, 12, 16, 21, 26, 32, 37, 41, 46, 52, 57, 61, 66];
+
+const alsEsc = s => String(s == null ? '' : s)
+  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+/* No real arrangement is longer than a day, but a block bound can be: a live
+   stream reports audio.duration as Infinity, recalc() folds that into
+   P.duration, and segList() hands it to a block as its end. Capping here
+   keeps every number finite and keeps toFixed clear of the exponential
+   notation it switches to at 1e21 — Live parses neither. */
+const ALS_MAX_SEC = 86400;
+
+/* beats, trimmed of trailing zeros; total, so no input can produce a value
+   that stops Live opening the file. toFixed goes exponential at 1e21, hence
+   the ceiling as well as the finite check. */
+const alsNum = v => (Number.isFinite(+v)
+  ? Math.round(Math.min(Math.max(+v, -1e12), 1e12) * 1e6) / 1e6 : 0)
+  .toFixed(6).replace(/0+$/, '').replace(/\.$/, '');
+
+/* Rewrites the first `<tag Value="…" />` in frag. The replacement is passed
+   as a function, so a block whose note contains $& or $1 cannot corrupt the
+   XML. Note the `\s*` — see the header. */
+const alsSet = (frag, tag, val) =>
+  frag.replace(new RegExp('<' + tag + ' Value="[^"]*"\\s*/>'),
+    () => '<' + tag + ' Value="' + val + '" />');
+
+const alsFrag = (tag, text) => {
+  const m = text.match(new RegExp('<' + tag + '\\s[^>]*>[\\s\\S]*?</' + tag + '>'));
+  return m ? m[0] : '';
+};
+
+/* Builds the whole set. Kept separate from the click handler so it is a pure
+   string→string function: same project in, same XML out. */
+function alsFrom(xml, proj, TL) {
+  const trkTmpl = alsFrag('MidiTrack', xml);
+  const locTmpl = alsFrag('Locator', xml);
+  const clipTmpl = alsFrag('MidiClip', trkTmpl);
+  if (!trkTmpl || !locTmpl || !clipTmpl) throw new Error('als template is missing a fragment');
+
+  /* seconds → beats at the template's own tempo, so the numbers stay honest
+     if the template is ever re-saved at another bpm */
+  const bpm = parseFloat((xml.match(/<Tempo>[\s\S]*?<Manual Value="([\d.]+)"/) || [])[1]) || 120;
+  const beats = sec => Math.min(Math.max(0, +sec || 0), ALS_MAX_SEC) * bpm / 60;
+
+  /* Every clone carries the template's internal ids and Live wants those
+     unique across the set. Renumber from well above anything the template
+     uses. Ids of 100 or less are list-local (KeyTrack, time signature) and
+     are left alone — Live itself repeats those in every clip. The leading
+     \s keeps NoteId="1" out of it, which must stay below its generator. */
+  let nextId = 50000;
+  const freshIds = frag => frag.replace(/\sId="(\d+)"/g,
+    (m, v) => +v > 100 ? ' Id="' + (++nextId) + '"' : m);
+
+  const locator = (time, name) => {
+    let s = locTmpl.replace(/<Locator\sId="\d+"/, () => '<Locator Id="' + (++nextId) + '"');
+    s = alsSet(s, 'Time', alsNum(time));
+    s = alsSet(s, 'Name', alsEsc(name));
+    return s;
+  };
+
+  /* start is arrangement beats; len is the clip's own length in beats */
+  const clip = (name, start, len, color) => {
+    let s = clipTmpl.replace(/<MidiClip\sId="\d+" Time="[^"]*"/,
+      () => '<MidiClip Id="' + (++nextId) + '" Time="' + alsNum(start) + '"');
+    s = alsSet(s, 'CurrentStart', alsNum(start));
+    s = alsSet(s, 'CurrentEnd', alsNum(start + len));
+    /* clip-relative from here down */
+    s = alsSet(s, 'LoopStart', '0');
+    s = alsSet(s, 'LoopEnd', alsNum(len));
+    s = alsSet(s, 'LoopOn', 'false');
+    s = alsSet(s, 'OutMarker', alsNum(len));
+    s = alsSet(s, 'HiddenLoopStart', '0');
+    s = alsSet(s, 'HiddenLoopEnd', alsNum(len));
+    s = alsSet(s, 'Name', alsEsc(name));
+    s = alsSet(s, 'Color', color);
+    /* the template clip borrows the set's swing groove — a blank marker
+       clip must not, or every note lands off the beat it was placed on */
+    s = alsSet(s, 'GrooveId', '-1');
+    /* the note editor opens on the clip rather than on the template's 4 bars */
+    s = alsSet(s, 'RightTime', alsNum(len));
+    s = alsSet(s, 'OtherTime', alsNum(len));
+    s = alsSet(s, 'FollowTime', alsNum(len));
+    s = s.replace(/<MidiNoteEvent Time="[^"]*" Duration="[^"]*"/,
+      () => '<MidiNoteEvent Time="0" Duration="' + alsNum(len) + '"');
+    return freshIds(s);
+  };
+
+  const track = (name, color, clips) => {
+    let s = trkTmpl.replace(/<MidiTrack\sId="\d+"/, () => '<MidiTrack Id="' + (++nextId) + '"');
+    s = alsSet(s, 'EffectiveName', alsEsc(name));
+    s = alsSet(s, 'UserName', alsEsc(name));
+    s = alsSet(s, 'MemorizedFirstClipName', '');
+    s = alsSet(s, 'Color', color);   /* the track's own Color precedes <Events> */
+    s = s.replace(/<Events>[\s\S]*?<\/Events>/,
+      () => '<Events>\n' + clips.join('\n') + '\n</Events>');
+    return freshIds(s);
+  };
+
+  /* blocks written before timelines existed carry no tl and belong to the first */
+  const onTL = b => b.tl ? b.tl === TL.id : TL === proj.timelines[0];
+
+  /* ── locators, one per cut ── */
+  const marks = (TL.marks || []).slice().sort((a, b) => a - b);
+  /* A cut has no name of its own, so the locator borrows the note of the
+     first block that starts on it: "03 chorus" reads better than "Cut 03"
+     once you are staring at the arrangement. */
+  const labelAt = t => {
+    let best = '';
+    proj.layers.forEach(L => L.tracks.forEach(T => T.blocks.forEach(b => {
+      if (!best && onTL(b) && Math.abs(b.s - t) < .05 && String(b.text || '').trim())
+        best = String(b.text).trim();
+    })));
+    return best;
+  };
+  const locs = marks.map((t, i) => {
+    const lab = labelAt(t);
+    return locator(beats(t), String(i + 1).padStart(2, '0') + (lab ? ' ' + lab : ''));
+  });
+
+  /* ── one Live track per track on screen, split when blocks overlap ── */
+  const trackXmls = [];
+  proj.layers.forEach(L => L.tracks.forEach(T => {
+    const blks = (T.blocks || []).filter(onTL)
+      .map(b => ({ s: Math.min(b.s, b.e), e: Math.max(b.s, b.e), text: b.text }))
+      .sort((a, b) => a.s - b.s || a.e - b.e);
+    if (!blks.length) return;
+
+    /* an arrangement track holds one clip at a time, so overlapping blocks
+       fan out into numbered sibling tracks rather than overwriting */
+    const lanes = [];
+    blks.forEach(b => {
+      const lane = lanes.find(l => !l.some(k => b.s < k.e - .001 && b.e > k.s + .001));
+      if (lane) lane.push(b); else lanes.push([b]);
+    });
+
+    lanes.forEach((laneBlks, laneIdx) => {
+      const color = ALS_COLORS[trackXmls.length % ALS_COLORS.length];
+      const clips = laneBlks.map(b => {
+        const start = beats(b.s);
+        /* a zero-length clip is rejected by Live; a 64th note is inaudible
+           but survives the round trip */
+        const len = Math.max(beats(b.e) - start, .0625);
+        return clip(String(b.text || '').trim() || T.name, start, len, color);
+      });
+      const base = (proj.layers.length > 1 ? L.name + ' - ' : '') + T.name;
+      trackXmls.push(track(lanes.length > 1 ? base + ' (' + (laneIdx + 1) + ')' : base,
+        color, clips));
+    });
+  }));
+
+  /* ── splice: our tracks, then the template's returns, verbatim ── */
+  const tStart = xml.indexOf('<Tracks>');
+  const tEnd = xml.indexOf('</Tracks>');
+  const returns = xml.slice(xml.indexOf('<ReturnTrack', tStart), tEnd);
+  let out = xml.slice(0, tStart) +
+    '<Tracks>\n' + trackXmls.join('\n') + '\n' + returns + '</Tracks>' +
+    xml.slice(tEnd + '</Tracks>'.length);
+
+  /* the set's locator list is a <Locators> nested inside a <Locators> */
+  const lStart = out.indexOf('<Locators>');
+  const lEnd = out.indexOf('</Locators>', out.indexOf('</Locators>', lStart) + 1) +
+    '</Locators>'.length;
+  out = out.slice(0, lStart) +
+    '<Locators>\n<Locators>\n' + locs.join('\n') + '\n</Locators>\n</Locators>' +
+    out.slice(lEnd);
+
+  /* must clear every id we just minted */
+  out = out.replace(/<NextPointeeId Value="[^"]*"\s*\/>/,
+    () => '<NextPointeeId Value="' + (nextId + 1) + '" />');
+
+  return out;
+}
+
 $('#mMidi').onclick = async () => {
+  const TL = curTL();
+  if (!TL) { toast('Nothing to export yet'); return; }
+  const hasBlocks = P.layers.some(L => L.tracks.some(T => (T.blocks || []).some(
+    b => b.tl ? b.tl === TL.id : TL === P.timelines[0])));
+  if (!hasBlocks && !(TL.marks || []).length) { toast('Nothing to export yet'); return; }
   try {
-    const xml = await decompressGzip(ALS_B64);
-    
-    const getTag = (tag, text) => {
-      const m = text.match(new RegExp('<' + tag + '\\s[^>]*>[\\s\\S]*?</' + tag + '>'));
-      return m ? m[0] : '';
-    };
-
-    const trkTmpl = getTag('MidiTrack', xml);
-    const locTmpl = getTag('Locator', xml);
-    const clipTmpl = getTag('MidiClip', trkTmpl);
-
-    let nextId = 50000;
-    const reassignIds = (frag) => {
-      return frag.replace(/Id="(\d+)"/g, (m, val) => {
-        if (parseInt(val, 10) > 100) {
-          nextId++;
-          return 'Id="' + nextId + '"';
-        }
-        return m;
-      });
-    };
-
-    const escapeXml = (str) => String(str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-
-    const makeLocator = (id, time, name) => {
-      let s = locTmpl.replace('Id="3"', 'Id="' + id + '"');
-      s = s.replace(/<Time Value="[^"]*"\/>/, '<Time Value="' + time + '"/>');
-      s = s.replace('<Name Value="testing"/>', '<Name Value="' + escapeXml(name) + '"/>');
-      return s;
-    };
-
-    const makeClip = (name, start, end) => {
-      nextId++;
-      let s = clipTmpl.replace('Id="5"', 'Id="' + nextId + '"');
-      s = s.replace(/Time="[^"]+"/, 'Time="' + start + '"');
-      s = s.replace(/<CurrentStart Value="[^"]*"\/>/, '<CurrentStart Value="' + start + '"/>');
-      s = s.replace(/<CurrentEnd Value="[^"]*"\/>/, '<CurrentEnd Value="' + end + '"/>');
-      s = s.replace('<Name Value="myclip"/>', '<Name Value="' + escapeXml(name) + '"/>');
-      s = s.replace(/<LoopStart Value="[^"]*"\/>/, '<LoopStart Value="' + start + '"/>');
-      s = s.replace(/<LoopEnd Value="[^"]*"\/>/, '<LoopEnd Value="' + end + '"/>');
-      s = s.replace(/<OutMarker Value="[^"]*"\/>/, '<OutMarker Value="' + end + '"/>');
-      s = s.replace(/<HiddenLoopStart Value="[^"]*"\/>/, '<HiddenLoopStart Value="' + start + '"/>');
-      s = s.replace(/<HiddenLoopEnd Value="[^"]*"\/>/, '<HiddenLoopEnd Value="' + end + '"/>');
-      const dur = end - start;
-      s = s.replace(/<MidiNoteEvent Time="[^"]*" Duration="[^"]*"/, '<MidiNoteEvent Time="0" Duration="' + dur + '"');
-      return reassignIds(s);
-    };
-
-    const makeTrack = (name, clips) => {
-      nextId++;
-      let s = trkTmpl.replace('Id="15"', 'Id="' + nextId + '"');
-      s = s.replace('<EffectiveName Value="layer 1"/>', '<EffectiveName Value="' + escapeXml(name) + '"/>');
-      s = s.replace('<UserName Value="layer 1"/>', '<UserName Value="' + escapeXml(name) + '"/>');
-      s = s.replace(/<Events>[\s\S]*?<\/Events>/, '<Events>\n' + clips.join('\n') + '\n</Events>');
-      return reassignIds(s);
-    };
-
-    const TL = curTL();
-    const cuts = TL.cuts && TL.cuts.length ? TL.cuts : (TL.marks || []).map((m, i) => ({ t: m, label: 'Cut ' + String(i+1).padStart(2, '0') }));
-    const locs = cuts.map((c, i) => {
-      const beat = (c.t || 0) * 2.0;
-      const name = c.label || ('Cut ' + String(i + 1).padStart(2, '0'));
-      return makeLocator(1000 + i, beat.toFixed(4), name);
-    });
-    const locsXml = '<Locators>\n<Locators>\n' + locs.join('\n') + '\n</Locators>\n</Locators>';
-
-    const trackXmls = [];
-    P.layers.forEach(L => {
-      L.tracks.forEach(T => {
-        const blks = T.blocks.filter(k => k.tl ? k.tl === TL.id : TL === P.timelines[0]);
-        if (!blks.length) return;
-
-        // Partition overlapping blocks into separate lanes so Ableton receives non-overlapping arrangement tracks
-        const lanes = [];
-        blks.forEach(b => {
-          let placed = false;
-          for (const lane of lanes) {
-            const overlap = lane.some(existing => (b.s < (existing.e - 0.001) && b.e > (existing.s + 0.001)));
-            if (!overlap) {
-              lane.push(b);
-              placed = true;
-              break;
-            }
-          }
-          if (!placed) lanes.push([b]);
-        });
-
-        lanes.forEach((laneBlks, laneIdx) => {
-          const clips = laneBlks.map(b => {
-            const sBeat = (b.s || 0) * 2.0;
-            const eBeat = (b.e || 0) * 2.0;
-            return makeClip(b.text || 'Section', sBeat.toFixed(4), eBeat.toFixed(4));
-          });
-          const baseName = (P.layers.length > 1 ? L.name + ' - ' : '') + T.name;
-          const trkName = lanes.length > 1 ? baseName + ' (' + (laneIdx + 1) + ')' : baseName;
-          trackXmls.push(makeTrack(trkName, clips));
-        });
-      });
-    });
-
-    const retStart = xml.indexOf('<ReturnTrack');
-    const tEnd = xml.indexOf('</Tracks>');
-    const returnTracksSuffix = xml.substring(retStart, tEnd);
-    const tracksXml = '<Tracks>\n' + trackXmls.join('\n') + '\n' + returnTracksSuffix + '\n</Tracks>';
-
-    const tStart = xml.indexOf('<Tracks>');
-    const tEndFull = tEnd + '</Tracks>'.length;
-    let xmlOut = xml.substring(0, tStart) + tracksXml + xml.substring(tEndFull);
-
-    const lStart = xmlOut.indexOf('<Locators>');
-    const lEnd = xmlOut.indexOf('</Locators>', xmlOut.indexOf('</Locators>', lStart) + 1) + '</Locators>'.length;
-    xmlOut = xmlOut.substring(0, lStart) + locsXml + xmlOut.substring(lEnd);
-
-    xmlOut = xmlOut.replace(/<NextPointeeId Value="[^"]*"\s*\/>/, '<NextPointeeId Value="' + (nextId + 1000) + '"/>');
-
+    const xmlOut = alsFrom(await decompressGzip(ALS_B64), P, TL);
     const blob = await compressGzip(xmlOut);
     const a = el('a');
     a.href = URL.createObjectURL(blob);
