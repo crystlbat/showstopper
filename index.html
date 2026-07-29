@@ -5946,9 +5946,19 @@ const ALS_COLORS = [0, 6, 12, 16, 21, 26, 32, 37, 41, 46, 52, 57, 61, 66];
 const alsEsc = s => String(s == null ? '' : s)
   .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
-/* beats, trimmed — never exponential notation, which Live will not parse */
-const alsNum = v => (Math.round((+v || 0) * 1e6) / 1e6).toFixed(6)
-  .replace(/0+$/, '').replace(/\.$/, '');
+/* No real arrangement is longer than a day, but a block bound can be: a live
+   stream reports audio.duration as Infinity, recalc() folds that into
+   P.duration, and segList() hands it to a block as its end. Capping here
+   keeps every number finite and keeps toFixed clear of the exponential
+   notation it switches to at 1e21 — Live parses neither. */
+const ALS_MAX_SEC = 86400;
+
+/* beats, trimmed of trailing zeros; total, so no input can produce a value
+   that stops Live opening the file. toFixed goes exponential at 1e21, hence
+   the ceiling as well as the finite check. */
+const alsNum = v => (Number.isFinite(+v)
+  ? Math.round(Math.min(Math.max(+v, -1e12), 1e12) * 1e6) / 1e6 : 0)
+  .toFixed(6).replace(/0+$/, '').replace(/\.$/, '');
 
 /* Rewrites the first `<tag Value="…" />` in frag. The replacement is passed
    as a function, so a block whose note contains $& or $1 cannot corrupt the
@@ -5973,7 +5983,7 @@ function alsFrom(xml, proj, TL) {
   /* seconds → beats at the template's own tempo, so the numbers stay honest
      if the template is ever re-saved at another bpm */
   const bpm = parseFloat((xml.match(/<Tempo>[\s\S]*?<Manual Value="([\d.]+)"/) || [])[1]) || 120;
-  const beats = sec => Math.max(0, +sec || 0) * bpm / 60;
+  const beats = sec => Math.min(Math.max(0, +sec || 0), ALS_MAX_SEC) * bpm / 60;
 
   /* Every clone carries the template's internal ids and Live wants those
      unique across the set. Renumber from well above anything the template
