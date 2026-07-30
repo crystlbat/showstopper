@@ -400,7 +400,12 @@ body:not(.editing) .drop .edit-only{display:none}
 #pod{
   --c:var(--cut);
   position:fixed;inset:0;z-index:24;display:none;flex-direction:column;
-  padding:calc(14px + env(safe-area-inset-top)) 16px calc(16px + env(safe-area-inset-bottom));
+  /* inset:0 resolves against the LAYOUT viewport, which on a mobile browser
+     with a dynamic toolbar is taller than what you can see — which is exactly
+     how the bottom of the wheel ended up under the nav bar. dvh ends where
+     the screen does; the line above stays as the fallback. */
+  height:100dvh;
+  padding:calc(12px + env(safe-area-inset-top)) 16px calc(12px + env(safe-area-inset-bottom));
   background:
     radial-gradient(80% 46% at 50% 104%,color-mix(in srgb,var(--c) 22%,transparent),transparent 70%),
     radial-gradient(120% 90% at 50% 6%,rgba(64,56,104,.97),rgba(16,14,27,.99));
@@ -413,8 +418,23 @@ body.pod #editor,body.pod #toolbar,body.pod #tlbar,body.pod #layerbar{pointer-ev
    where the pod is the whole screen — it has to be told to stand down, or a
    stray ⋯ floats over a mode that is supposed to be nothing but the wheel */
 body.pod .menu,body.pod #top,body.pod #notebar{display:none}
+/* #ytDock is z-index 17 and the pod overlay is 24, so the link panel rendered
+   behind it — there was no way to paste an audio link without leaving. */
+body.pod #ytDock{z-index:26}
 
-.pod-screen{flex:none;text-align:center;padding:6px 0 12px}
+.pod-screen{flex:none;text-align:center;padding:2px 0 10px;min-height:0}
+/* Which song this is, and the way to change it. Without this there is no
+   route to the link field at all from inside pod mode: #ytDock sits below the
+   overlay and the ⋯ menu is hidden on a phone. */
+.pod-src{
+  display:inline-flex;align-items:center;gap:8px;max-width:86%;margin-bottom:8px;
+  padding:9px 15px;min-height:40px;border-radius:99px;border:1px solid var(--line2);
+  background:rgba(255,255,255,.045);font-family:var(--ui);font-size:12px;color:var(--dim);
+}
+.pod-src i{font-style:normal;color:var(--c);font-size:13px}
+.pod-src span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pod-src:active{background:rgba(255,255,255,.09)}
+
 .pod-time{font-family:var(--mono);display:flex;align-items:baseline;justify-content:center;gap:8px}
 .pod-time b{
   font-size:clamp(38px,13vw,62px);font-weight:400;letter-spacing:-.02em;color:var(--text);
@@ -470,14 +490,27 @@ body.pod .menu,body.pod #top,body.pod #notebar{display:none}
 
 /* one-tap labels: naming without a keyboard, which is the difference
    between noting a moment and missing the next one */
-.pod-chips{
-  flex:none;display:flex;flex-wrap:wrap;gap:8px;justify-content:center;
-  padding:2px 0 10px;max-height:23vh;overflow-y:auto;
+/* Thirteen labels wrapped into five rows and took 23% of a real phone, which
+   is what pushed the wheel off the bottom. One row, swiped sideways, with the
+   edges faded so it is obvious there is more. */
+.pod-chipwrap{
+  flex:none;position:relative;margin:0 -16px;padding:2px 0 8px;
+  -webkit-mask:linear-gradient(90deg,transparent,#000 22px,#000 calc(100% - 22px),transparent);
+  mask:linear-gradient(90deg,transparent,#000 22px,#000 calc(100% - 22px),transparent);
 }
+.pod-chips{
+  display:flex;flex-wrap:nowrap;gap:8px;padding:0 16px;
+  overflow-x:auto;overflow-y:hidden;scroll-snap-type:x proximity;
+  scrollbar-width:none;-webkit-overflow-scrolling:touch;
+}
+.pod-chips::-webkit-scrollbar{display:none}
 .pod-chip{
   font-family:var(--ui);font-size:12px;font-weight:600;color:var(--dim);
-  padding:10px 14px;min-height:40px;border-radius:99px;border:1px solid var(--line2);
-  background:rgba(255,255,255,.04);transition:.14s;max-width:46vw;
+  padding:11px 16px;min-height:44px;border-radius:99px;border:1px solid var(--line2);
+  background:rgba(255,255,255,.04);transition:.14s;transform:none;
+  /* a label like "Groove change, samy rythm" must not be able to set the
+     height of the row every other label lives in */
+  max-width:40vw;flex:none;scroll-snap-align:center;
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
 }
 .pod-chip.on{
@@ -513,14 +546,41 @@ body.pod .menu,body.pod #top,body.pod #notebar{display:none}
   color:var(--faint);text-align:center;padding:14px 0;
 }
 
+/* the way to the marks list and the loop, now that neither competes for the
+   main screen */
+.pod-handle{
+  flex:none;align-self:center;margin:2px 0 6px;padding:9px 16px;min-height:40px;
+  border-radius:99px;border:1px solid var(--line2);background:rgba(255,255,255,.03);
+  font-family:var(--ui);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--faint);
+}
+.pod-handle b{font-family:var(--mono);font-size:12px;color:var(--c);font-weight:400;letter-spacing:0}
+.pod-handle:active{background:rgba(255,255,255,.08)}
+
+.pod-sheet{
+  position:absolute;inset:0;z-index:3;display:none;align-items:flex-end;
+  background:rgba(8,6,14,.5);backdrop-filter:blur(3px);
+  margin:calc(-12px - env(safe-area-inset-top)) -16px calc(-12px - env(safe-area-inset-bottom));
+}
+.pod-sheet.on{display:flex}
+.ps-card{
+  width:100%;max-height:64%;overflow-y:auto;padding:10px 16px calc(20px + env(safe-area-inset-bottom));
+  border-radius:20px 20px 0 0;border-top:1px solid var(--line2);
+  background:linear-gradient(180deg,rgba(46,41,74,.99),rgba(26,23,42,.99));
+  box-shadow:0 -20px 60px rgba(0,0,0,.6);
+}
+.ps-grab{width:38px;height:4px;border-radius:99px;background:rgba(255,255,255,.22);margin:2px auto 14px}
+
 .pod-pads{display:none}
 
 /* flex:none matters: in a column flex container, flex:1 sets the height, and a
    box with both width and height resolved ignores aspect-ratio — which drew
    the wheel as an ellipse. margin-top:auto still floats it to the bottom. */
+/* A footprint the rest of the column cannot eat into: flex:none plus a cap in
+   dvh, so a long chip row or a full marks list scrolls rather than shoving the
+   wheel through the bottom of the screen. */
 .pod-wheel{
   flex:none;position:relative;align-self:center;margin-top:auto;
-  width:min(78vw,var(--wheel-max),62vh);aspect-ratio:1;
+  width:min(78vw,var(--wheel-max),46dvh);aspect-ratio:1;
 }
 /* The wheel is a dial, not a grey disc: the arc is how far into the song you
    are, the ticks around the rim are the cuts the drag will catch on, and the
@@ -546,11 +606,14 @@ body.pod .menu,body.pod #top,body.pod #notebar{display:none}
 .pw-dial{
   position:absolute;inset:0;border-radius:50%;pointer-events:none;
   background:conic-gradient(var(--c,var(--cut)) calc(var(--prog) * 360deg),transparent 0);
-  /* inset at both edges so the arc reads as engraved into the rim rather
-     than painted over it */
-  -webkit-mask:radial-gradient(closest-side,transparent 0 80%,#000 81% 95%,transparent 96%);
-  mask:radial-gradient(closest-side,transparent 0 80%,#000 81% 95%,transparent 96%);
-  opacity:.85;filter:saturate(1.1);
+  /* Drawn as a ring hugging the centre button, NOT on the rim. The rim is
+     where the thumb has to land to rotate, and an arc painted there reads as
+     "drag along this edge" — it fought the one gesture the wheel exists for.
+     The button is 46% of the wheel's width, so its edge is at 46% of the
+     radius; the ring sits just outside that and nothing ever touches it. */
+  -webkit-mask:radial-gradient(closest-side,transparent 0 49%,#000 50% 57%,transparent 58%);
+  mask:radial-gradient(closest-side,transparent 0 49%,#000 50% 57%,transparent 58%);
+  opacity:.95;filter:saturate(1.1);
 }
 /* the cuts, around the rim, so the detents are something you can see coming */
 .pw-ticks{position:absolute;inset:0;pointer-events:none}
@@ -563,10 +626,15 @@ body.pod .menu,body.pod #top,body.pod #notebar{display:none}
   transform-origin:50% 50%;
 }
 .pw-ticks i::before{
-  /* on the dial's own track, at the arc's radius, so these read as
-     graduations rather than marks scattered across the face */
-  content:'';position:absolute;left:0;top:6.5%;width:100%;height:8px;border-radius:2px;
-  background:rgba(255,255,255,.55);
+  /* Moved in with the arc. Out on the rim these came out as scattered tally
+     marks at random angles; against the ring they are graduations.
+
+     The bar is full-height and rotated about the centre, so `top` is measured
+     in diameters: a mark at r% of the RADIUS needs top = 50% - r/2. The ring
+     sits at 50–57% of the radius, so 23.5% lands on it. 43% put them at 14%
+     of the radius — behind the centre button, invisible. */
+  content:'';position:absolute;left:0;top:23.5%;width:100%;height:7px;border-radius:2px;
+  background:rgba(255,255,255,.62);
 }
 /* a cut already passed sits under the filled arc, so it becomes a notch cut
    into it rather than a line drawn over it */
@@ -582,21 +650,22 @@ body.pod .menu,body.pod #top,body.pod #notebar{display:none}
 .pw-ring.spin .pw-dial{opacity:1}
 /* held by a cut — the tick you feel on a real wheel, for a screen that
    cannot always buzz (iOS ignores navigator.vibrate entirely) */
-.pw-ring.mag{
-  box-shadow:
-    inset 0 0 0 2px var(--cut),inset 0 1px 0 rgba(255,255,255,.16),
-    0 20px 54px rgba(0,0,0,.6),0 0 42px rgba(143,166,255,.34);
-}
+.pw-ring.mag .pw-dial{box-shadow:none;filter:saturate(1.4) brightness(1.25)}
+.pw-ring.mag{box-shadow:inset 0 1px 0 rgba(255,255,255,.16),0 20px 54px rgba(0,0,0,.6)}
+/* held by a cut: the centre button says so, since that is where the eye is */
+.pw-ring.mag ~ .pw-centre{box-shadow:0 0 0 5px rgba(143,166,255,.30),0 10px 26px rgba(0,0,0,.55)}
+/* 9.5px was unreadable on a real screen and a poor target besides. These sit
+   out on the rim now that the arc has left it — the widest part of the wheel,
+   where there is room to make them big. */
 .pw-q{
-  position:absolute;font-family:var(--ui);font-size:9.5px;letter-spacing:.18em;
+  position:absolute;font-family:var(--ui);font-size:13px;letter-spacing:.16em;
   text-transform:uppercase;color:var(--dim);pointer-events:none;
-  text-shadow:0 1px 3px rgba(0,0,0,.7);
+  text-shadow:0 1px 3px rgba(0,0,0,.75);
 }
-/* clear of the arc band, so a label is never read through a colour */
-.pw-menu{top:24%;left:50%;transform:translateX(-50%)}
-.pw-play{bottom:24%;left:50%;transform:translateX(-50%);font-size:13px;letter-spacing:0}
-.pw-prev{left:22%;top:50%;transform:translateY(-50%);font-size:12px;letter-spacing:0}
-.pw-next{right:22%;top:50%;transform:translateY(-50%);font-size:12px;letter-spacing:0}
+.pw-menu{top:7%;left:50%;transform:translateX(-50%)}
+.pw-play{bottom:6%;left:50%;transform:translateX(-50%);font-size:17px;letter-spacing:0}
+.pw-prev{left:6%;top:50%;transform:translateY(-50%);font-size:16px;letter-spacing:0}
+.pw-next{right:6%;top:50%;transform:translateY(-50%);font-size:16px;letter-spacing:0}
 .pw-ring.press-menu .pw-menu,.pw-ring.press-play .pw-play,
 .pw-ring.press-prev .pw-prev,.pw-ring.press-next .pw-next{color:var(--text)}
 
@@ -667,8 +736,10 @@ body.pod .menu,body.pod #top,body.pod #notebar{display:none}
   .pod-sec{margin:0}
   /* the timeline itself now says where you are, and shows every mark in
      place — the map and the recent list would only be repeating it */
-  .pod-map,.pod-said,.pod-loop{display:none}
-  .pod-recent{display:none}
+  .pod-map,.pod-said{display:none}
+  /* the timeline shows every mark in place, so the list is redundant here —
+     but the loop lives in the sheet now and is wanted on a tablet too */
+  .pod-handle{display:none}
 
   .pod-wheel{
     position:absolute;bottom:10px;width:var(--pod-deck);height:var(--pod-deck);
@@ -1906,9 +1977,9 @@ button{touch-action:manipulation;-webkit-tap-highlight-color:transparent}
 
 <div id="pod">
   <div class="pod-screen">
+    <button class="pod-src" id="podSrc"><i>♪</i><span id="podSrcName">no audio</span></button>
     <div class="pod-time"><b id="podTime">0:00</b><span id="podTotal">/ 0:00</span></div>
     <div class="pod-sec" id="podSec">—</div>
-    <button class="pod-loop" id="podLoop">⟲ loop section</button>
     <div class="pod-map" id="podMap" aria-hidden="true">
       <canvas id="podWave"></canvas>
       <div class="pm-loop" id="podLoopBar"></div>
@@ -1917,8 +1988,8 @@ button{touch-action:manipulation;-webkit-tap-highlight-color:transparent}
     </div>
     <div class="pod-said" id="podSaid"></div>
   </div>
-  <div class="pod-chips" id="podChips"></div>
-  <div class="pod-recent" id="podRecent"></div>
+  <div class="pod-chipwrap"><div class="pod-chips" id="podChips"></div></div>
+  <button class="pod-handle" id="podHandle">⌃ <b id="podHandleN">0</b> marks</button>
   <div class="pod-pads" id="podPads"></div>
   <div class="pod-wheel" id="podWheel">
     <!-- the ring is one touch surface: a drag rotates, a tap presses
@@ -1936,6 +2007,15 @@ button{touch-action:manipulation;-webkit-tap-highlight-color:transparent}
     <button class="pw-centre" id="podCentre"><b>mark</b><i id="podCentreSub">tap · hold</i></button>
   </div>
   <button class="pod-mirror" id="podMirror" title="Swap which side the wheel is on">⇄</button>
+  <!-- Everything that used to compete with the wheel for the main screen.
+       The wheel stays live underneath, so the song keeps running. -->
+  <div class="pod-sheet" id="podSheet">
+    <div class="ps-card">
+      <div class="ps-grab" aria-hidden="true"></div>
+      <button class="pod-loop" id="podLoop">⟲ loop section</button>
+      <div class="pod-recent" id="podRecent"></div>
+    </div>
+  </div>
 </div>
 
 <div id="ytDock">
@@ -6567,6 +6647,7 @@ function paintPod() {
   /* the whole mode takes the colour of the track it is about to write to, so
      the control looks like what it does */
   $('#pod').style.setProperty('--c', (T && T.color) || 'var(--cut)');
+  paintPodSrc();
   podProgress();
 }
 
@@ -6590,20 +6671,21 @@ function paintPodRecent() {
   (curLayer().tracks || []).forEach(T => (T.blocks || []).forEach(b => {
     if (b.tl ? b.tl === tl : true) all.push({ b, T });
   }));
+  const n = $('#podHandleN'); if (n) n.textContent = all.length;
   if (!all.length) {
     const n = el('div', 'pod-recent-none');
     n.textContent = 'nothing marked yet — spin to a moment, then press mark';
     box.appendChild(n);
     return;
   }
-  all.sort((x, y) => y.b.s - x.b.s).slice(0, 5).forEach(({ b, T }) => {
+  all.sort((x, y) => y.b.s - x.b.s).slice(0, 12).forEach(({ b, T }) => {
     const r = el('button', 'pod-rec' + (String(b.text || '').trim() ? '' : ' unnamed'));
     r.style.setProperty('--pc', T.color);
     const dot = el('i'), t = el('u'), tx = el('b');
     t.textContent = fmt(b.s);
     tx.textContent = String(b.text || '').trim() || T.name;
     r.append(dot, t, tx);
-    r.onclick = () => { seek(b.s); paintPod(); paintPodTicks(); };
+    r.onclick = () => { seek(b.s); podSheet(false); paintPod(); paintPodTicks(); };
     box.appendChild(r);
   });
 }
@@ -6886,6 +6968,26 @@ $('#podPads').addEventListener('pointerup', e => {
   podPressEnd();
 });
 
+/* ── the sheet ── */
+function podSheet(on) {
+  $('#podSheet').classList.toggle('on', on);
+  if (on) paintPodRecent();
+}
+$('#podHandle').onclick = () => podSheet(!$('#podSheet').classList.contains('on'));
+$('#podSheet').onclick = e => { if (e.target.id === 'podSheet') podSheet(false); };
+
+/* ── the audio source ── */
+function paintPodSrc() {
+  const n = $('#podSrcName'); if (!n) return;
+  n.textContent = P.ytTitle || P.audioName || (P.ytId ? 'youtube' : 'no audio · tap to add');
+}
+$('#podSrc').onclick = () => {
+  /* ytOpen() is the same panel the toolbar uses; it just needed a way to be
+     asked for, and to come up above the overlay rather than behind it */
+  ytOpen();
+  const u = $('#ytUrl'); if (u) setTimeout(() => u.focus(), 60);
+};
+
 $('#podLoop').onclick = () => {
   if (loopRange) { setLoop(null); return; }
   const sg = segAt(clamp(playPos, 0, Math.max(P.duration - .001, 0)));
@@ -6935,6 +7037,7 @@ function setPod(on) {
   } else {
     if (playing) stopPlay();
     setLoop(null);
+    podSheet(false);
     podHold = null; podRot = null;
     if (document.fullscreenElement) { try { document.exitFullscreen(); } catch (e) {} }
   }
