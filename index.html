@@ -39,6 +39,9 @@
   --scrub-h:30px;
   --knob:15px;
   --ruler-h:134px;
+  --wheel-max:340px;      /* the wheel never outgrows a thumb's arc */
+  --pod-deck:236px;       /* the corner the wheel and the pads each occupy */
+  --pod-padw:min(34vw,320px);   /* the pad column, referenced by the chip row */
   --side-w:192px;
   --bar:52px;
 }
@@ -347,6 +350,390 @@ body:not(.editing) .drop .edit-only{display:none}
   position:absolute;bottom:var(--scrub-h);height:30px;display:flex;align-items:center;gap:10px;
   padding:0 2px 0 10px;overflow:hidden;font-family:var(--ui);font-size:10px;color:var(--faint);
   border-left:1px solid var(--line2);letter-spacing:.08em;
+}
+
+/* ── the device question ──────────────────────────────
+   Three answers, asked once, remembered — and reachable again from the menu,
+   because a phone in a stand becomes a tablet and nobody wants to clear
+   storage over it. */
+#devAsk{
+  position:fixed;inset:0;z-index:58;display:none;align-items:center;justify-content:center;padding:20px;
+  background:rgba(10,8,18,.72);backdrop-filter:blur(10px);
+}
+#devAsk.on{display:flex}
+.dev-card{
+  width:min(460px,100%);padding:26px;border-radius:16px;text-align:center;
+  border:1px solid var(--line2);background:linear-gradient(180deg,rgba(48,42,76,.98),rgba(28,25,45,.98));
+  box-shadow:0 30px 80px rgba(0,0,0,.7);
+}
+.dev-card h3{
+  margin:8px 0 6px;font-family:var(--txt);font-size:22px;font-weight:600;
+  letter-spacing:-.02em;color:var(--text);
+}
+.dev-card p{margin:0 0 18px;font-size:13px;color:var(--dim);line-height:1.5}
+.dev-opts{display:flex;flex-direction:column;gap:9px}
+.dev-opt{
+  display:flex;flex-direction:column;align-items:flex-start;gap:3px;padding:14px 16px;
+  border-radius:11px;border:1px solid var(--line2);background:rgba(255,255,255,.035);
+  text-align:left;transition:.14s;
+}
+.dev-opt:hover{background:rgba(255,255,255,.075);border-color:var(--cut)}
+.dev-opt b{font-family:var(--txt);font-size:15.5px;font-weight:600;color:var(--text);letter-spacing:-.01em}
+.dev-opt i{font-style:normal;font-size:12px;color:var(--faint)}
+/* the guess, offered rather than imposed */
+.dev-opt.guess{border-color:var(--cut);background:color-mix(in srgb,var(--cut) 12%,transparent)}
+.dev-opt.guess b::after{
+  content:'looks like this';margin-left:9px;font-family:var(--ui);font-size:8.5px;
+  letter-spacing:.16em;text-transform:uppercase;color:var(--cut);font-weight:400;
+}
+.dev-skip{
+  margin-top:14px;font-family:var(--ui);font-size:9.5px;letter-spacing:.16em;
+  text-transform:uppercase;color:var(--faint);padding:8px 10px;
+}
+.dev-skip:hover{color:var(--dim)}
+
+/* ── pod mode: a click wheel ─────────────────────────
+   The one control you can work without looking, which is the whole point —
+   on a phone your eyes and ears belong to the song, not to aiming at a 10px
+   diamond. Laid out for the thumb: everything that gets pressed while the
+   music plays is in the bottom half. */
+#pod{
+  --c:var(--cut);
+  position:fixed;inset:0;z-index:24;display:none;flex-direction:column;
+  padding:calc(14px + env(safe-area-inset-top)) 16px calc(16px + env(safe-area-inset-bottom));
+  background:
+    radial-gradient(80% 46% at 50% 104%,color-mix(in srgb,var(--c) 22%,transparent),transparent 70%),
+    radial-gradient(120% 90% at 50% 6%,rgba(64,56,104,.97),rgba(16,14,27,.99));
+  backdrop-filter:blur(6px);touch-action:none;user-select:none;
+}
+body.pod #pod{display:flex}
+/* while the wheel has the screen, nothing behind it should take a touch */
+body.pod #editor,body.pod #toolbar,body.pod #tlbar,body.pod #layerbar{pointer-events:none}
+/* the app's own chrome sits above this overlay by z-index, so on a phone —
+   where the pod is the whole screen — it has to be told to stand down, or a
+   stray ⋯ floats over a mode that is supposed to be nothing but the wheel */
+body.pod .menu,body.pod #top,body.pod #notebar{display:none}
+
+.pod-screen{flex:none;text-align:center;padding:6px 0 12px}
+.pod-time{font-family:var(--mono);display:flex;align-items:baseline;justify-content:center;gap:8px}
+.pod-time b{
+  font-size:clamp(38px,13vw,62px);font-weight:400;letter-spacing:-.02em;color:var(--text);
+  font-variant-numeric:tabular-nums;text-shadow:0 0 28px color-mix(in srgb,var(--c) 45%,transparent);
+}
+.pod-time span{font-size:13px;color:var(--faint);font-variant-numeric:tabular-nums}
+.pod-sec{font-family:var(--ui);font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--dim);margin-top:4px}
+.pod-sec b{color:var(--c);font-weight:600}
+/* ── the song map ─────────────────────────────────────
+   The top of the phone layout, and the thing that makes the mode look like
+   something rather than a grey dial on a gradient. Real audio when a file is
+   loaded; otherwise a ribbon drawn from the project's own shape — where the
+   cuts and notes cluster — which is honest about what it knows. */
+.pod-map{
+  position:relative;height:78px;margin:14px auto 0;max-width:520px;width:100%;
+  border-radius:12px;overflow:hidden;border:1px solid var(--line2);
+  background:linear-gradient(180deg,rgba(0,0,0,.30),rgba(0,0,0,.14));
+}
+.pod-map canvas{display:block;width:100%;height:100%}
+/* everything not yet reached is held back, so the played part reads as lit.
+   A width driven by a custom property means no canvas redraw per frame. */
+.pm-veil{
+  position:absolute;top:0;bottom:0;right:0;width:calc((1 - var(--prog,0)) * 100%);
+  background:linear-gradient(90deg,rgba(12,10,20,.16),rgba(12,10,20,.52));
+  pointer-events:none;transition:width .08s linear;
+}
+.pm-loop{
+  position:absolute;top:0;bottom:0;display:none;
+  border-left:1.5px solid var(--live);border-right:1.5px solid var(--live);
+  background:color-mix(in srgb,var(--live) 12%,transparent);pointer-events:none;
+}
+.pm-loop.on{display:block}
+.pod-map u{
+  position:absolute;top:0;bottom:0;width:1.5px;margin-left:-.75px;text-decoration:none;
+  background:var(--play);box-shadow:0 0 12px var(--play);pointer-events:none;
+}
+.pod-map u::after{
+  content:'';position:absolute;left:-3.5px;top:-1px;width:8px;height:8px;border-radius:50%;
+  background:var(--play);box-shadow:0 0 10px var(--play);
+}
+.pod-said{font-family:var(--txt);font-size:14px;font-weight:600;color:var(--faint);margin-top:12px;min-height:20px}
+.pod-said b{color:var(--cut)}
+/* Hearing the passage again is the real answer to "I missed it" — cheaper
+   than any amount of cleverness about writing faster. */
+.pod-loop{
+  margin-top:10px;font-family:var(--ui);font-size:10px;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--dim);padding:9px 14px;min-height:38px;border-radius:99px;
+  border:1px solid var(--line2);background:rgba(255,255,255,.04);transition:.14s;
+}
+.pod-loop.on{color:#120f1c;background:var(--live);border-color:var(--live)}
+/* the looped stretch, marked on the strip so the repeat is visible */
+.pod-spark s{position:absolute;bottom:0;height:3px;background:var(--live);opacity:.85;text-decoration:none}
+
+/* one-tap labels: naming without a keyboard, which is the difference
+   between noting a moment and missing the next one */
+.pod-chips{
+  flex:none;display:flex;flex-wrap:wrap;gap:8px;justify-content:center;
+  padding:2px 0 10px;max-height:23vh;overflow-y:auto;
+}
+.pod-chip{
+  font-family:var(--ui);font-size:12px;font-weight:600;color:var(--dim);
+  padding:10px 14px;min-height:40px;border-radius:99px;border:1px solid var(--line2);
+  background:rgba(255,255,255,.04);transition:.14s;max-width:46vw;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+.pod-chip.on{
+  color:#120f1c;background:var(--c);border-color:var(--c);
+  box-shadow:0 0 0 4px color-mix(in srgb,var(--c) 18%,transparent),0 6px 18px rgba(0,0,0,.4);
+}
+.pod-chip.new{color:var(--faint);border-style:dashed}
+
+/* What you have just put down, newest first — the void above the wheel was
+   the one place on a phone with room for it, and seeing the last few marks is
+   what makes marking blind feel safe. Tap one to go back to it. */
+.pod-recent{
+  flex:1;min-height:0;overflow-y:auto;display:flex;flex-direction:column;gap:6px;
+  padding:2px 0 10px;max-width:520px;width:100%;align-self:center;
+}
+.pod-rec{
+  display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:10px;
+  border:1px solid var(--line);background:rgba(255,255,255,.03);text-align:left;
+}
+.pod-rec:active{background:rgba(255,255,255,.07)}
+.pod-rec i{width:7px;height:7px;border-radius:50%;background:var(--pc);flex:none}
+.pod-rec u{
+  text-decoration:none;font-family:var(--mono);font-size:11.5px;color:var(--faint);flex:none;
+  font-variant-numeric:tabular-nums;
+}
+.pod-rec b{
+  font-family:var(--txt);font-size:13.5px;font-weight:600;color:var(--dim);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+.pod-rec.unnamed b{color:var(--faint);font-style:italic}
+.pod-recent-none{
+  font-family:var(--ui);font-size:9.5px;letter-spacing:.16em;text-transform:uppercase;
+  color:var(--faint);text-align:center;padding:14px 0;
+}
+
+.pod-pads{display:none}
+
+/* flex:none matters: in a column flex container, flex:1 sets the height, and a
+   box with both width and height resolved ignores aspect-ratio — which drew
+   the wheel as an ellipse. margin-top:auto still floats it to the bottom. */
+.pod-wheel{
+  flex:none;position:relative;align-self:center;margin-top:auto;
+  width:min(78vw,var(--wheel-max),62vh);aspect-ratio:1;
+}
+/* The wheel is a dial, not a grey disc: the arc is how far into the song you
+   are, the ticks around the rim are the cuts the drag will catch on, and the
+   whole thing takes the armed track's colour so the control looks like the
+   thing it is about to write to. --prog and --c are set from script. */
+.pw-ring{
+  --prog:0;
+  position:absolute;inset:0;border-radius:50%;touch-action:none;cursor:grab;isolation:isolate;
+  background:
+    radial-gradient(closest-side at 50% 22%,rgba(255,255,255,.10),transparent 62%),
+    conic-gradient(from 180deg,rgba(255,255,255,.055),rgba(255,255,255,.02) 25%,rgba(255,255,255,.075) 50%,rgba(255,255,255,.02) 75%,rgba(255,255,255,.055)),
+    radial-gradient(closest-side,rgba(10,8,18,.55) 52%,rgba(255,255,255,.06) 54%,rgba(255,255,255,.10) 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.16),
+    inset 0 -14px 30px rgba(0,0,0,.34),
+    0 20px 54px rgba(0,0,0,.6);
+}
+.pw-ring::after{
+  content:'';position:absolute;inset:0;border-radius:50%;
+  border:1px solid rgba(255,255,255,.12);pointer-events:none;
+}
+/* how far through the song, as an arc — a dial you can read at a glance */
+.pw-dial{
+  position:absolute;inset:0;border-radius:50%;pointer-events:none;
+  background:conic-gradient(var(--c,var(--cut)) calc(var(--prog) * 360deg),transparent 0);
+  /* inset at both edges so the arc reads as engraved into the rim rather
+     than painted over it */
+  -webkit-mask:radial-gradient(closest-side,transparent 0 80%,#000 81% 95%,transparent 96%);
+  mask:radial-gradient(closest-side,transparent 0 80%,#000 81% 95%,transparent 96%);
+  opacity:.85;filter:saturate(1.1);
+}
+/* the cuts, around the rim, so the detents are something you can see coming */
+.pw-ticks{position:absolute;inset:0;pointer-events:none}
+/* Each tick is a full-height bar rotated about the wheel's centre, with the
+   visible mark near its top. That way the radius is a share of the wheel
+   rather than a pixel count, and it scales from a phone to a tablet with no
+   arithmetic in script — which only ever has to set the angle. */
+.pw-ticks i{
+  position:absolute;left:50%;top:0;bottom:0;width:2px;margin-left:-1px;
+  transform-origin:50% 50%;
+}
+.pw-ticks i::before{
+  /* on the dial's own track, at the arc's radius, so these read as
+     graduations rather than marks scattered across the face */
+  content:'';position:absolute;left:0;top:6.5%;width:100%;height:8px;border-radius:2px;
+  background:rgba(255,255,255,.55);
+}
+/* a cut already passed sits under the filled arc, so it becomes a notch cut
+   into it rather than a line drawn over it */
+.pw-ticks i.past::before{background:rgba(10,8,20,.55)}
+/* a highlight sliding over the rim, so the surface reads as a surface */
+.pw-sheen{
+  position:absolute;inset:0;border-radius:50%;pointer-events:none;
+  background:linear-gradient(150deg,rgba(255,255,255,.10),transparent 42%);
+  -webkit-mask:radial-gradient(closest-side,transparent 0 52%,#000 53%);
+  mask:radial-gradient(closest-side,transparent 0 52%,#000 53%);
+}
+.pw-ring.spin{cursor:grabbing}
+.pw-ring.spin .pw-dial{opacity:1}
+/* held by a cut — the tick you feel on a real wheel, for a screen that
+   cannot always buzz (iOS ignores navigator.vibrate entirely) */
+.pw-ring.mag{
+  box-shadow:
+    inset 0 0 0 2px var(--cut),inset 0 1px 0 rgba(255,255,255,.16),
+    0 20px 54px rgba(0,0,0,.6),0 0 42px rgba(143,166,255,.34);
+}
+.pw-q{
+  position:absolute;font-family:var(--ui);font-size:9.5px;letter-spacing:.18em;
+  text-transform:uppercase;color:var(--dim);pointer-events:none;
+  text-shadow:0 1px 3px rgba(0,0,0,.7);
+}
+/* clear of the arc band, so a label is never read through a colour */
+.pw-menu{top:24%;left:50%;transform:translateX(-50%)}
+.pw-play{bottom:24%;left:50%;transform:translateX(-50%);font-size:13px;letter-spacing:0}
+.pw-prev{left:22%;top:50%;transform:translateY(-50%);font-size:12px;letter-spacing:0}
+.pw-next{right:22%;top:50%;transform:translateY(-50%);font-size:12px;letter-spacing:0}
+.pw-ring.press-menu .pw-menu,.pw-ring.press-play .pw-play,
+.pw-ring.press-prev .pw-prev,.pw-ring.press-next .pw-next{color:var(--text)}
+
+.pw-centre{
+  position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
+  width:46%;aspect-ratio:1;border-radius:50%;
+  background:
+    radial-gradient(closest-side at 50% 18%,rgba(255,255,255,.13),transparent 70%),
+    linear-gradient(180deg,rgba(56,49,88,.99),rgba(30,26,48,.99));
+  border:1px solid rgba(255,255,255,.14);
+  box-shadow:
+    0 10px 26px rgba(0,0,0,.55),
+    inset 0 1px 0 rgba(255,255,255,.16),
+    0 0 0 1px color-mix(in srgb,var(--c) 22%,transparent);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;
+  font-family:var(--ui);transition:transform .1s,box-shadow .15s,background .15s;
+}
+.pw-centre b{font-size:12.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--text);font-weight:600}
+.pw-centre i{font-style:normal;font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--faint)}
+.pw-centre:active{transform:translate(-50%,-50%) scale(.96)}
+/* a mark that is still growing, so a hold looks like a hold */
+.pw-centre.holding{background:linear-gradient(180deg,var(--cut),#6d81d8);box-shadow:0 0 0 6px rgba(143,166,255,.18),0 10px 26px rgba(0,0,0,.5)}
+.pw-centre.holding b,.pw-centre.holding i{color:#120f1c}
+.pw-centre.flash{box-shadow:0 0 0 8px rgba(143,166,255,0);transition:box-shadow .4s}
+
+.pod-mirror{
+  position:absolute;top:calc(12px + env(safe-area-inset-top));right:16px;
+  font-family:var(--ui);font-size:15px;color:var(--faint);
+  width:42px;height:42px;border-radius:50%;border:1px solid var(--line2);display:none;
+}
+
+/* ── the tablet console ───────────────────────────────
+   A tablet is not a roomier phone: it can be held in two hands with both
+   thumbs free, so the wheel takes one bottom corner, a pad per track takes
+   the other, and the real timeline stays on screen between them. A phone
+   marks one track at a time; this marks several in one pass. */
+@media (orientation:landscape) and (min-height:600px){
+  #pod{
+    background:none;backdrop-filter:none;pointer-events:none;
+    padding:0 calc(10px + env(safe-area-inset-right)) calc(10px + env(safe-area-inset-bottom)) calc(10px + env(safe-area-inset-left));
+    display:none;
+  }
+  body.pod #pod{display:block}
+  /* the timeline underneath is the point — let it be touched, and let the
+     app's own chrome back: on a tablet pod mode is a mode, not a takeover */
+  body.pod #editor,body.pod #toolbar,body.pod #tlbar,body.pod #layerbar{pointer-events:auto}
+  body.pod .menu{display:flex}
+  /* and keep the lanes clear of the corners the hands are occupying */
+  /* #editor is inset:0, so moving its bottom edge up genuinely shrinks the
+     box the lanes and the track headers lay out inside. Padding only moved
+     the lanes and left the headers running under the wheel. */
+  body.pod #editor{bottom:calc(var(--pod-deck) + 16px)}
+  /* The capture headline lives above the editor at z-index 3 and is only
+     faded out, so for the length of that fade it is readable through a pod
+     overlay that is deliberately transparent. Nothing is being captured in
+     pod mode, so take it out of the layer order entirely. */
+  body.pod #stage{display:none}
+
+  /* clear of the toolbar and the two chip rows above the ruler, or the
+     readout lands on top of the app's own controls */
+  .pod-screen{
+    position:absolute;left:50%;top:calc(var(--bar) * 2 + 34px);transform:translateX(-50%);
+    display:flex;align-items:baseline;gap:14px;padding:8px 16px;border-radius:99px;
+    border:1px solid var(--line2);background:rgba(24,21,38,.92);backdrop-filter:blur(14px);
+    pointer-events:auto;text-align:left;
+  }
+  .pod-time b{font-size:22px}
+  .pod-sec{margin:0}
+  /* the timeline itself now says where you are, and shows every mark in
+     place — the map and the recent list would only be repeating it */
+  .pod-map,.pod-said,.pod-loop{display:none}
+  .pod-recent{display:none}
+
+  .pod-wheel{
+    position:absolute;bottom:10px;width:var(--pod-deck);height:var(--pod-deck);
+    margin:0;pointer-events:auto;
+  }
+  /* Anchored between the pad column and the wheel, not centred on the
+     viewport — centring put the first chips on top of the last two pads. */
+  .pod-chips{
+    position:absolute;bottom:10px;max-height:var(--pod-deck);pointer-events:auto;
+    align-content:flex-end;padding:0;transform:none;max-width:none;
+    left:calc(var(--side-w) + var(--pod-padw) + 28px + env(safe-area-inset-left));
+    right:calc(var(--pod-deck) + 26px + env(safe-area-inset-right));
+  }
+  body.pod-left .pod-chips{
+    left:calc(var(--side-w) + var(--pod-deck) + 28px + env(safe-area-inset-left));
+    right:calc(var(--pod-padw) + 26px + env(safe-area-inset-right));
+  }
+  .pod-pads{
+    position:absolute;bottom:10px;display:grid;gap:8px;pointer-events:auto;
+    width:var(--pod-padw);grid-template-columns:repeat(2,1fr);
+  }
+  .pod-mirror{display:block;pointer-events:auto;top:auto;bottom:calc(var(--pod-deck) + 18px);right:16px}
+
+  /* Right-handed by default: wheel right, pads left. Mirrored on request,
+     because which way round a tablet is held is not guessable.
+
+     Whichever lands on the left starts after the track-header column: the
+     lanes deliberately bleed past the bottom edge (see the negative margin on
+     .side/.scroller), so the bottom-left corner is not empty space — it is
+     the last track's header, and covering the names while offering pads for
+     those same tracks would be a poor trade. */
+  #pod .pod-wheel{right:calc(10px + env(safe-area-inset-right));left:auto}
+  #pod .pod-pads{left:calc(var(--side-w) + 12px + env(safe-area-inset-left));right:auto}
+  body.pod-left #pod .pod-wheel{left:calc(var(--side-w) + 12px + env(safe-area-inset-left));right:auto}
+  body.pod-left #pod .pod-pads{right:calc(10px + env(safe-area-inset-right));left:auto}
+  body.pod-left .pod-mirror{right:auto;left:16px}
+
+  /* the deck floats over a workspace, so it needs to read as being in front */
+  #pod::before{
+    content:'';position:absolute;left:0;right:0;bottom:0;height:calc(var(--pod-deck) + 40px);
+    background:linear-gradient(180deg,transparent,rgba(14,12,24,.62) 45%,rgba(14,12,24,.86));
+    pointer-events:none;
+  }
+
+  .pod-pad{
+    display:flex;flex-direction:column;align-items:flex-start;justify-content:center;gap:2px;
+    min-height:calc((var(--pod-deck) - 8px) / 2);padding:8px 12px;border-radius:12px;
+    border:1px solid var(--line2);background:linear-gradient(180deg,rgba(255,255,255,.06),rgba(255,255,255,.02));
+    font-family:var(--ui);transition:transform .08s,box-shadow .12s,background .12s;
+    position:relative;overflow:hidden;
+  }
+  .pod-pad::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--pc)}
+  .pod-pad b{font-size:12.5px;font-weight:600;color:var(--text);letter-spacing:-.01em;
+    max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .pod-pad i{font-style:normal;font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--faint)}
+  .pod-pad:active,.pod-pad.hit{transform:scale(.97);background:linear-gradient(180deg,var(--pc),rgba(255,255,255,.06))}
+  .pod-pad.hit b,.pod-pad.hit i{color:#120f1c}
+  .pod-pad.holding{box-shadow:0 0 0 3px var(--pc)}
+  .pod-pgn{
+    grid-column:1 / -1;font-family:var(--ui);font-size:9.5px;letter-spacing:.16em;
+    text-transform:uppercase;color:var(--faint);padding:6px;text-align:center;
+  }
+}
+@media (prefers-reduced-motion:reduce){
+  .pw-centre,.pod-pad,.pod-spark u{transition:none}
 }
 
 /* ── scrub band: somewhere safe to drag the playhead ──
@@ -1391,6 +1778,8 @@ button{touch-action:manipulation;-webkit-tap-highlight-color:transparent}
     <button id="mMidi">Export Ableton (.als)</button>
     <hr>
     <button id="mCompact">Compact capture: off</button>
+    <button id="mPod">◉ Open pod mode</button>
+    <button id="mDevice">Device: —</button>
     <button id="mLogs">Technical log</button>
     <button id="mRestore">Restore backup<span id="mRestoreWhen"></span></button>
     <hr>
@@ -1439,6 +1828,7 @@ button{touch-action:manipulation;-webkit-tap-highlight-color:transparent}
     <button class="btn ghost" id="ytBtn" title="Play the song straight from YouTube — nothing to load">YouTube</button>
     <div class="spacer"></div>
     <button id="liveBtn" title="Play and write notes as it runs"><i></i>Live notes</button>
+    <button class="btn ghost" id="podBtn" title="A click wheel you can work without looking — for a thumb, not a keyboard">◉ Pod</button>
     <div class="seg-ctl" id="zoomCtl">
       <button id="zoomOut" title="Zoom out">−</button>
       <button id="zoomFit" title="Fit to width">FIT</button>
@@ -1485,6 +1875,67 @@ button{touch-action:manipulation;-webkit-tap-highlight-color:transparent}
   </div>
 </div>
 
+</div>
+
+<!-- Pod mode. An overlay rather than a screen of its own, so the editor is
+     still rendered underneath: a phone covers it completely, a landscape
+     tablet leaves the ruler and lanes on show and only takes the corners.
+     One implementation, two appearances, and render() keeps working. -->
+<!-- Asked once, because guessing from the pointer gets it wrong often enough
+     to matter: a tablet with a keyboard reads as a laptop, a laptop with a
+     touchscreen reads as a tablet, and only the person holding it knows. -->
+<div id="devAsk">
+  <div class="dev-card">
+    <span class="eyebrow">before you start</span>
+    <h3>What are you working on?</h3>
+    <p id="devGuess">—</p>
+    <div class="dev-opts">
+      <button class="dev-opt" data-kind="phone">
+        <b>Phone</b><i>tap to capture · the wheel for notes</i>
+      </button>
+      <button class="dev-opt" data-kind="tablet">
+        <b>Tablet</b><i>timeline plus a pad per track</i>
+      </button>
+      <button class="dev-opt" data-kind="laptop">
+        <b>Laptop</b><i>the full editor, keyboard and all</i>
+      </button>
+    </div>
+    <button class="dev-skip" id="devSkip">decide later</button>
+  </div>
+</div>
+
+<div id="pod">
+  <div class="pod-screen">
+    <div class="pod-time"><b id="podTime">0:00</b><span id="podTotal">/ 0:00</span></div>
+    <div class="pod-sec" id="podSec">—</div>
+    <button class="pod-loop" id="podLoop">⟲ loop section</button>
+    <div class="pod-map" id="podMap" aria-hidden="true">
+      <canvas id="podWave"></canvas>
+      <div class="pm-loop" id="podLoopBar"></div>
+      <div class="pm-veil"></div>
+      <u id="podHead"></u>
+    </div>
+    <div class="pod-said" id="podSaid"></div>
+  </div>
+  <div class="pod-chips" id="podChips"></div>
+  <div class="pod-recent" id="podRecent"></div>
+  <div class="pod-pads" id="podPads"></div>
+  <div class="pod-wheel" id="podWheel">
+    <!-- the ring is one touch surface: a drag rotates, a tap presses
+         whichever quadrant it landed in. The labels are printed on, not
+         buttons, or they would swallow the drag before it started. -->
+    <div class="pw-ring" id="podRing">
+      <div class="pw-dial"></div>
+      <div class="pw-ticks" id="podTicks"></div>
+      <div class="pw-sheen"></div>
+      <span class="pw-q pw-menu">menu</span>
+      <span class="pw-q pw-prev">◀◀</span>
+      <span class="pw-q pw-next">▶▶</span>
+      <span class="pw-q pw-play" id="podPlayGlyph">▶</span>
+    </div>
+    <button class="pw-centre" id="podCentre"><b>mark</b><i id="podCentreSub">tap · hold</i></button>
+  </div>
+  <button class="pod-mirror" id="podMirror" title="Swap which side the wheel is on">⇄</button>
 </div>
 
 <div id="ytDock">
@@ -1788,6 +2239,7 @@ button{touch-action:manipulation;-webkit-tap-highlight-color:transparent}
     <input id="sdName" class="sd-name" placeholder="name this one…" autocomplete="off">
     <div class="sd-acts">
       <button class="sd-btn go" id="sdSend">Send</button>
+      <button class="sd-btn" id="sdPod">◉ Notes on the wheel</button>
       <button class="sd-btn" id="sdAgain">Record again</button>
     </div>
     <div class="sd-state" id="sdState"></div>
@@ -2255,11 +2707,13 @@ let compactPref = null;                 /* null = auto, true/false = user's choi
 try { const v = localStorage.getItem(CMPKEY); if (v === '0' || v === '1') compactPref = v === '1'; } catch (e) {}
 const smallScreen = () => Math.min(innerWidth, innerHeight) <= 500 || innerWidth <= 620;
 const isCompact = () => compactPref === null ? smallScreen() : compactPref;
-function setCompact(v) {
+function setCompact(v, quiet) {
   compactPref = v;
   try { localStorage.setItem(CMPKEY, v ? '1' : '0'); } catch (e) {}
   paintCompactMenu();
-  toast(v ? 'compact capture on' : 'full editor mode');
+  /* the device chooser sets this as one part of a bigger answer and says so
+     in its own words, so it asks for silence here rather than two toasts */
+  if (!quiet) toast(v ? 'compact capture on' : 'full editor mode');
 }
 /* where "get back to work" lands: the editor normally, the hand-off screen
    on a device too small to use it (the editor stays one tap away) */
@@ -2452,7 +2906,19 @@ $('#sdMore').onclick = () => { $('#send').classList.remove('done'); startRetake(
 $('#sdOpen').onclick = () => go('edit');
 $('#sdDoneHome').onclick = () => go('home');
 $('#sdAgain').onclick = () => startRetake();
-$('#sdEditor').onclick = () => go('edit');
+/* Opening a project on a phone used to land in the laptop editor: a
+   keyboard-shaped screen on a device with no keyboard, reached by a button
+   that only promised "full". Where that editor genuinely does not work — a
+   coarse pointer on a screen small enough for isCompact() — the wheel comes
+   up with it, and pod's MENU quadrant drops to the bare editor for anyone who
+   actually wanted it. A tablet keeps the choice: its editor is usable, so
+   ◉ Pod stays a button rather than a destiny. */
+const podIsTheWayIn = () => podCoarse() && isCompact();
+function enterEditor() {
+  go('edit');
+  if (podIsTheWayIn() && !podOn) setPod(true);
+}
+$('#sdEditor').onclick = enterEditor;
 $('#sdHome').onclick = () => go('home');
 
 /* ═══ origin — whose work is this? ═══════════════════════════════════
@@ -2906,6 +3372,8 @@ function paintSceneName() {
 function loadScene(sc) {
   Object.assign(P, migrate(JSON.parse(JSON.stringify(sc.data))));
   markPLoaded(sc);
+  /* a loop belongs to the song it was set over, not to the app */
+  if (typeof setLoop === 'function') setLoop(null);
   lib.current = sc.id;
   armedKey = null; playPos = 0; lastPos = 0; selMarker = -1; sel = null;
   if (typeof closeNote === 'function' && noteOpen) closeNote();
@@ -3670,6 +4138,7 @@ async function cloudAuth() {
     slog('ok', 'signed in as ' + cloud.user);
     paintCloud();
     await cloudPull(true);
+    askDeviceOnce();
     /* Anything made before signing in is real work — hand it over, don't
        strand it on the device. */
     if (lib.scenes.some(s => !s.deleted)) await cloudSave({ quiet: true });
@@ -3946,6 +4415,9 @@ async function cloudBoot() {
     closeAuth();
     paintSync();
     slog('info', 'ready', srv.on ? 'sync connected · pull/push is manual' : 'sync not connected · local only');
+    /* the static build never signs in, so arriving is the only moment there
+       is to ask — the account build asks once the account is known instead */
+    askDeviceOnce();
     return;
   }
   document.body.classList.add('cloud');
@@ -3965,6 +4437,7 @@ async function cloudBoot() {
     slog('info', 'ready', 'signed in as ' + cloud.user + ' · saving happens on its own');
     paintCloud();
     await cloudPull(true);
+    askDeviceOnce();
   } else {
     slog('info', 'ready', 'not signed in · projects are on this device until you do');
     cloudMode = saved.user ? 'in' : 'up';
@@ -4968,12 +5441,19 @@ function recalc() {
   const last = P.markers.length ? P.markers[P.markers.length - 1] : 0;
   P.duration = Math.max(last, mediaDuration(), 4);
 }
-function snap(t) {
-  let best = t, d = 12 / pps();
+/* The nearest cut to t, or t itself if none is within tol — where tol is in
+   seconds. Dragging on the timeline wants a tolerance measured in pixels and
+   converted; the pod wheel is not the timeline and has no pixels to convert,
+   so it passes its own. Same search either way, one place to be wrong. */
+function nearestCut(t, tol) {
+  let best = t, d = tol;
   for (const m of P.markers) if (Math.abs(m - t) < d) { d = Math.abs(m - t); best = m; }
-  if (Math.abs(P.duration - t) < 12 / pps()) best = P.duration;
+  if (Math.abs(P.duration - t) < tol) best = P.duration;
   return best;
 }
+/* kept a declaration, not a const arrow: hoisting means callers cannot land
+   in a temporal dead zone if one is ever moved above this point */
+function snap(t) { return nearestCut(t, 12 / pps()); }
 
 /* ═══ render ══════════════════════════════════════════ */
 function renderTLBar() {
@@ -5703,14 +6183,21 @@ phHead.addEventListener('dblclick', e => {
 
 $('#playBtn').onclick = togglePlay;
 $('#toStart').onclick = () => seek(0);
-$('#prevCut').onclick = () => {
-  const prev = [...P.markers].reverse().find(m => m < playPos - .35);
-  seek(prev == null ? 0 : prev);
-};
-$('#nextCut').onclick = () => {
-  const nxt = P.markers.find(m => m > playPos + .05);
-  seek(nxt == null ? P.duration : nxt);
-};
+/* One cut back or forward. The backward threshold is the wider of the two on
+   purpose: pressing back a moment into a section means "the start of this
+   one", not "the one before it". The pod wheel's side quadrants want the same
+   behaviour, so it lives here rather than in two click handlers. */
+function stepCut(dir) {
+  if (dir < 0) {
+    const prev = [...P.markers].reverse().find(m => m < playPos - .35);
+    seek(prev == null ? 0 : prev);
+  } else {
+    const nxt = P.markers.find(m => m > playPos + .05);
+    seek(nxt == null ? P.duration : nxt);
+  }
+}
+$('#prevCut').onclick = () => stepCut(-1);
+$('#nextCut').onclick = () => stepCut(1);
 function togglePlay() {
   playing ? stopPlay() : startPlay();
 }
@@ -5744,6 +6231,16 @@ function seek(t) {
 function advance(dt) {
   if (playing) {
     playPos = hasClock() ? srcTime() : playPos + dt;
+    /* Round again rather than run past. This is what makes "I missed it"
+       survivable: the passage comes back, and each lap you add another
+       track's marks over the last. Checked before the end-of-song stop, so a
+       loop over the final section keeps looping instead of ending. */
+    if (loopRange && playPos >= loopRange[1] - .01) {
+      playPos = loopRange[0]; lastPos = loopRange[0];
+      if (hasClock()) srcSeek(loopRange[0]);
+      updatePos();
+      return;
+    }
     if (playPos >= P.duration) { playPos = P.duration; stopPlay(); }
 
     /* every cut the playhead crosses sends a ripple through the background */
@@ -5791,6 +6288,7 @@ $('#audioName').onclick = () => { if ($('#audioName').classList.contains('need')
 function updatePos() {
   const ph = $('#playhead');
   if (ph) ph.style.left = t2x(playPos) + 'px';
+  if (podOn) podTick();
   const knob = $('#scrubKnob');
   if (knob) {
     /* The ruler clips, so hold the whole knob inside it at either end rather
@@ -5914,12 +6412,24 @@ function closeNote() {
   $('#seghi').classList.remove('locked');
   $('#noteInput').blur();
 }
+/* One note onto one track, saved and logged. The note bar builds it from a
+   typed line; the pod wheel and its pads build it from a thumb. */
+function addNote(T, s, e, text) {
+  if (!T) return null;
+  const bk = { id: uid(), s, e, text: text || '', tl: (curTL() || {}).id };
+  T.blocks.push(bk);
+  save(); render();
+  const shown = String(text || '').trim();
+  logHist(lib.current, shown
+    ? 'Added note on ' + T.name + ': "' + (shown.length > 40 ? shown.slice(0, 40) + '…' : shown) + '"'
+    : 'Marked a moment on ' + T.name + ' at ' + fmt(s));
+  return bk;
+}
+
 function placeNote() {
   const inp = $('#noteInput'), txt = inp.value.trim(), T = armedTrack();
   if (!txt || !T || !noteTarget) return;
-  T.blocks.push({ id: uid(), s: noteTarget[0], e: noteTarget[1], text: txt, tl: (curTL() || {}).id });
-  save(); render();
-  logHist(lib.current, 'Added note on ' + T.name + ': "' + (txt.length > 40 ? txt.slice(0, 40) + '…' : txt) + '"');
+  addNote(T, noteTarget[0], noteTarget[1], txt);
   const nb = $('#notebar');
   nb.classList.add('flash'); setTimeout(() => nb.classList.remove('flash'), 220);
   inp.value = '';
@@ -5927,6 +6437,629 @@ function placeNote() {
   noteTarget = targetNow();
   paintNote(); inp.focus();
 }
+
+/* ═══ pod mode — the click wheel ══════════════════════
+   The phone bargain is the one capture already makes: your thumb says WHEN,
+   and the WHAT comes from a chip rather than a keyboard, because typing is
+   the thing that makes you miss the next ten seconds.
+
+   The ring is a single touch surface. A drag rotates it; a tap presses
+   whichever quadrant it landed in. That is how the original behaved, and it
+   is also the only way the two gestures can share one circle without one of
+   them stealing the other's events. */
+
+let podOn = false;
+let podRot = null;               /* live rotation: raw time, last angle, seek throttle */
+let podHold = null;              /* the centre button or a pad, mid-press */
+let podChip = '';                /* the armed label, '' for an unnamed mark */
+let loopRange = null;            /* [start, end] in seconds, or null */
+let loopWarned = false;
+let podLeft = false;             /* wheel on the left, for the other way round */
+const PODKEY = 'tapline.podleft';
+try { podLeft = localStorage.getItem(PODKEY) === '1'; } catch (e) {}
+
+const POD_TURN = 30;             /* seconds of song per full turn, at rest */
+const POD_GAIN = 4;              /* how much faster a deliberate fast spin runs */
+/* Acceleration needs a deadband, or it fights the one thing the wheel is
+   already weakest at. Below POD_SPIN0 a careful thumb is exactly 1:1, so
+   nudging up to a moment stays possible; only a spin past that — the gesture
+   for crossing a whole song — runs faster, reaching POD_GAIN at POD_SPIN1. */
+const POD_SPIN0 = 3;             /* rad/s: still 1:1 */
+const POD_SPIN1 = 15;            /* rad/s: full gain */
+const POD_DETENT = .5;           /* a cut's magnetic pull, in seconds */
+const POD_TAP = 1.2;             /* a tapped mark's length — the 'cut' snap rule */
+const POD_HOLD = 220;            /* past this, a press is a span not a point */
+const POD_PADS = 8;              /* pads per page; smaller than a thumb is useless */
+let podPage = 0;
+
+const podCoarse = () => {
+  try { return matchMedia('(pointer: coarse)').matches; } catch (e) { return false; }
+};
+/* Must agree with the media query below, or script and stylesheet disagree
+   about which layout is on screen. Height rather than pointer: the console
+   needs room for a timeline between the two decks, which a phone held
+   sideways does not have and a laptop does. */
+const podLandscape = () => {
+  try { return matchMedia('(orientation: landscape) and (min-height: 600px)').matches; } catch (e) { return false; }
+};
+
+/* Labels you have actually used, most-used first, across the whole library —
+   a second project inherits the first one's vocabulary instead of starting
+   mute. Only the very first project ever falls back to the generic set. */
+const POD_SEED = ['drop', 'build', 'break', 'vocal in', 'fill', 'quiet'];
+function podLabels() {
+  const n = new Map();
+  (lib.scenes || []).forEach(sc => {
+    if (sc.deleted) return;
+    ((sc.data || {}).layers || []).forEach(L => (L.tracks || []).forEach(T =>
+      (T.blocks || []).forEach(b => {
+        const t = String(b.text || '').trim();
+        if (t && t.length <= 28) n.set(t, (n.get(t) || 0) + 1);
+      })));
+  });
+  const used = [...n.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(e => e[0]);
+  return used.length ? used.slice(0, 12) : POD_SEED.slice();
+}
+
+function paintPodChips() {
+  const box = $('#podChips'); if (!box) return;
+  box.innerHTML = '';
+  podLabels().forEach(txt => {
+    const c = el('button', 'pod-chip' + (txt === podChip ? ' on' : ''));
+    c.textContent = txt;
+    /* arming is a toggle: tapping the armed one goes back to unnamed marks */
+    c.onclick = () => { podChip = (podChip === txt ? '' : txt); paintPodChips(); paintPod(); };
+    box.appendChild(c);
+  });
+}
+
+/* which track a mark lands on: a pad says so outright, otherwise the armed
+   one — the concept the pads exist to make unnecessary */
+function podTrack(key) {
+  const L = curLayer();
+  if (key) return L.tracks.find(t => tkey(t) === key) || armedTrack();
+  return armedTrack();
+}
+
+function paintPodPads() {
+  const box = $('#podPads'); if (!box) return;
+  box.innerHTML = '';
+  const all = (curLayer().tracks || []);
+  const pages = Math.max(1, Math.ceil(all.length / POD_PADS));
+  podPage = clamp(podPage, 0, pages - 1);
+  all.slice(podPage * POD_PADS, podPage * POD_PADS + POD_PADS).forEach(T => {
+    const p = el('button', 'pod-pad');
+    p.style.setProperty('--pc', T.color);
+    p.dataset.key = tkey(T);
+    const b = el('b'); b.textContent = T.name;
+    const n = (T.blocks || []).filter(k => k.tl ? k.tl === (curTL() || {}).id : true).length;
+    const i = el('i'); i.textContent = n === 1 ? '1 note' : n + ' notes';
+    p.append(b, i);
+    box.appendChild(p);
+  });
+  if (pages > 1) {
+    /* paging rather than shrinking: a pad too small to hit blind has stopped
+       being a pad, which is the only thing pads are for */
+    const pg = el('button', 'pod-pgn');
+    pg.textContent = 'page ' + (podPage + 1) + ' / ' + pages + '  ›';
+    pg.onclick = () => { podPage = (podPage + 1) % pages; paintPodPads(); };
+    box.appendChild(pg);
+  }
+}
+
+function paintPod() {
+  if (!podOn) return;
+  $('#podTime').textContent = fmt(playPos);
+  $('#podTotal').textContent = '/ ' + fmt(P.duration);
+  const sg = segAt(clamp(playPos, 0, Math.max(P.duration - .001, 0)));
+  const T = armedTrack();
+  const sec = $('#podSec');
+  sec.innerHTML = '';
+  if (sg) {
+    const n = el('b'); n.textContent = String(sg[2] + 1).padStart(2, '0');
+    sec.append(document.createTextNode('section '), n,
+      document.createTextNode(' · ' + fmt(sg[0]) + '–' + fmt(sg[1]) +
+        (T && !podLandscape() ? '  ·  ' + T.name : '')));
+  } else sec.textContent = '—';
+  $('#podPlayGlyph').textContent = playing ? '❚❚' : '▶';
+  const sub = $('#podCentreSub');
+  if (sub) sub.textContent = podChip ? podChip : 'tap · hold';
+  /* the whole mode takes the colour of the track it is about to write to, so
+     the control looks like what it does */
+  $('#pod').style.setProperty('--c', (T && T.color) || 'var(--cut)');
+  podProgress();
+}
+
+/* the arc, and the strip's fill — one number, set as a custom property so the
+   browser does the drawing and this stays cheap enough for every frame */
+function podProgress() {
+  const p = clamp(playPos / (P.duration || 1), 0, 1);
+  $('#podRing').style.setProperty('--prog', p.toFixed(4));
+  const m = $('#podMap');
+  if (m) m.style.setProperty('--prog', p.toFixed(4));
+}
+
+/* The last few marks, newest first. Marking without looking only feels safe
+   if you can glance down and see that it landed — and a tap here goes back to
+   the moment, which is the whole review pass on a phone. */
+function paintPodRecent() {
+  const box = $('#podRecent'); if (!box) return;
+  box.innerHTML = '';
+  const tl = (curTL() || {}).id;
+  const all = [];
+  (curLayer().tracks || []).forEach(T => (T.blocks || []).forEach(b => {
+    if (b.tl ? b.tl === tl : true) all.push({ b, T });
+  }));
+  if (!all.length) {
+    const n = el('div', 'pod-recent-none');
+    n.textContent = 'nothing marked yet — spin to a moment, then press mark';
+    box.appendChild(n);
+    return;
+  }
+  all.sort((x, y) => y.b.s - x.b.s).slice(0, 5).forEach(({ b, T }) => {
+    const r = el('button', 'pod-rec' + (String(b.text || '').trim() ? '' : ' unnamed'));
+    r.style.setProperty('--pc', T.color);
+    const dot = el('i'), t = el('u'), tx = el('b');
+    t.textContent = fmt(b.s);
+    tx.textContent = String(b.text || '').trim() || T.name;
+    r.append(dot, t, tx);
+    r.onclick = () => { seek(b.s); paintPod(); paintPodTicks(); };
+    box.appendChild(r);
+  });
+}
+
+/* the cuts around the rim: ones already passed light up, so the wheel shows
+   how much of the song has been worked through as well as where you are */
+function paintPodTicks() {
+  const box = $('#podTicks'); if (!box) return;
+  box.innerHTML = '';
+  (P.markers || []).forEach(t => {
+    const i = el('i');
+    /* 12 o'clock is zero, the same place the arc starts */
+    i.style.transform = 'rotate(' + (clamp(t / (P.duration || 1), 0, 1) * 360) + 'deg)';
+    if (t <= playPos) i.classList.add('past');
+    box.appendChild(i);
+  });
+}
+
+/* Called from updatePos, so every frame while the song runs. The playhead dot
+   is one style write and can happen at that rate; the readouts only change
+   when the displayed second does, so they are gated on it. */
+let podSaidTime = '';
+function podTick() {
+  movePodHead(); podProgress();
+  const t = fmt(playPos);
+  /* the readouts and the rim ticks only change when the displayed second
+     does; the arc and the dot move every frame because they are one style
+     write each */
+  if (t !== podSaidTime) { podSaidTime = t; paintPod(); paintPodTicks(); }
+}
+
+/* The song map. Drawn once per change rather than per frame — the played
+   portion is lit by a CSS veil whose width follows a custom property, and the
+   playhead is a DOM element, so neither costs a redraw. */
+function paintPodSpark() {
+  const box = $('#podMap'); if (!box) return;
+  const lb = $('#podLoopBar');
+  if (lb) {
+    lb.classList.toggle('on', !!loopRange);
+    if (loopRange) {
+      lb.style.left = clamp(loopRange[0] / (P.duration || 1) * 100, 0, 100) + '%';
+      lb.style.width = clamp((loopRange[1] - loopRange[0]) / (P.duration || 1) * 100, .5, 100) + '%';
+    }
+  }
+  drawPodMap();
+  movePodHead();
+}
+function movePodHead() {
+  const u = $('#podHead'); if (!u) return;
+  u.style.left = clamp(playPos / (P.duration || 1) * 100, 0, 100) + '%';
+}
+
+/* The ribbon down the middle of the map. With an audio file loaded these are
+   the real peaks. With a YouTube link there is no audio to read at all, so
+   rather than draw something invented, this draws the shape of the breakdown
+   itself: how thickly cuts and notes fall around each moment, smoothed. It
+   looks like a waveform because a song's busy parts and a breakdown's busy
+   parts tend to be the same places — but it is the project's own data. */
+function podRibbon(n) {
+  const dur = P.duration || 1, out = new Array(n).fill(0);
+  if (peaks && peaks.length && audio.duration) {
+    for (let i = 0; i < n; i++) {
+      const idx = Math.floor(i / n * peaks.length);
+      out[i] = peaks[clamp(idx, 0, peaks.length - 1)] || 0;
+    }
+    return out;
+  }
+  /* density: every cut and every note lends weight to the moments near it */
+  const add = (t, w, spread) => {
+    const c = t / dur * n, r = Math.max(spread / dur * n, 1.2);
+    for (let i = Math.max(0, Math.floor(c - r)); i < Math.min(n, Math.ceil(c + r)); i++) {
+      const d = Math.abs(i - c) / r;
+      out[i] += w * Math.max(0, 1 - d * d);
+    }
+  };
+  (P.markers || []).forEach(t => add(t, 1, dur * .035));
+  const tl = (curTL() || {}).id;
+  (P.layers || []).forEach(L => (L.tracks || []).forEach(T => (T.blocks || []).forEach(b => {
+    if (b.tl && b.tl !== tl) return;
+    add((b.s + b.e) / 2, .7, Math.max(b.e - b.s, dur * .02) / 2);
+  })));
+  let max = 0;
+  for (const v of out) max = Math.max(max, v);
+  /* a floor, so an empty project still has a horizon rather than a dead line */
+  for (let i = 0; i < n; i++) out[i] = .18 + (max ? out[i] / max : 0) * .82;
+  return out;
+}
+
+function drawPodMap() {
+  const c = $('#podWave'), box = $('#podMap');
+  if (!c || !box) return;
+  const w = box.clientWidth, h = box.clientHeight;
+  if (!w || !h) return;
+  const d = Math.min(devicePixelRatio || 1, 2);
+  c.width = Math.round(w * d); c.height = Math.round(h * d);
+  const g = c.getContext('2d');
+  g.setTransform(d, 0, 0, d, 0, 0);
+  g.clearRect(0, 0, w, h);
+  const dur = P.duration || 1, X = t => clamp(t / dur * w, 0, w);
+
+  /* alternating section bands: the structure, before any of the detail */
+  segList().forEach(([s0, e0, i]) => {
+    g.fillStyle = i % 2 ? 'rgba(255,255,255,.038)' : 'rgba(255,255,255,.014)';
+    g.fillRect(X(s0), 0, Math.max(X(e0) - X(s0), .5), h);
+  });
+
+  /* the ribbon, mirrored about a line a little above centre */
+  const n = Math.max(24, Math.min(Math.round(w / 2.2), 320));
+  const rib = podRibbon(n), mid = h * .46, amp = h * .34;
+  const grad = g.createLinearGradient(0, mid - amp, 0, mid + amp);
+  grad.addColorStop(0, 'rgba(127,212,224,.70)');
+  grad.addColorStop(.5, 'rgba(143,166,255,.55)');
+  grad.addColorStop(1, 'rgba(140,123,255,.28)');
+  g.fillStyle = grad;
+  g.beginPath();
+  g.moveTo(0, mid);
+  for (let i = 0; i < n; i++) g.lineTo(i / (n - 1) * w, mid - rib[i] * amp);
+  for (let i = n - 1; i >= 0; i--) g.lineTo(i / (n - 1) * w, mid + rib[i] * amp * .62);
+  g.closePath(); g.fill();
+
+  /* cuts over the top, as the dividers they are */
+  g.strokeStyle = 'rgba(143,166,255,.55)'; g.lineWidth = 1;
+  (P.markers || []).forEach(t => {
+    const x = Math.round(X(t)) + .5;
+    g.beginPath(); g.moveTo(x, 0); g.lineTo(x, h); g.stroke();
+  });
+
+  /* and every mark on this timeline along the foot, in its track's colour —
+     what you have written, where you wrote it */
+  const tl = (curTL() || {}).id;
+  (curLayer().tracks || []).forEach(T => (T.blocks || []).forEach(b => {
+    if (b.tl && b.tl !== tl) return;
+    g.fillStyle = T.color;
+    g.globalAlpha = String(b.text || '').trim() ? .95 : .45;
+    g.fillRect(X(b.s), h - 7, Math.max(X(b.e) - X(b.s), 2), 4);
+  }));
+  g.globalAlpha = 1;
+}
+
+/* ── the ring ── */
+const podCentreOf = () => {
+  const r = $('#podRing').getBoundingClientRect();
+  return { x: r.left + r.width / 2, y: r.top + r.height / 2, r: r.width / 2 };
+};
+const podAngle = (e, c) => Math.atan2(e.clientY - c.y, e.clientX - c.x);
+/* which printed quadrant a point sits in — atan2 with y down, so -π/2 is up */
+function podQuadrant(e, c) {
+  const a = Math.atan2(e.clientY - c.y, e.clientX - c.x);
+  if (a >= -Math.PI * .75 && a < -Math.PI * .25) return 'menu';
+  if (a >= -Math.PI * .25 && a < Math.PI * .25) return 'next';
+  if (a >= Math.PI * .25 && a < Math.PI * .75) return 'play';
+  return 'prev';
+}
+
+$('#podRing').addEventListener('pointerdown', e => {
+  e.preventDefault();
+  const c = podCentreOf();
+  const d = Math.hypot(e.clientX - c.x, e.clientY - c.y);
+  if (d > c.r * 1.04) return;                      /* outside the wheel entirely */
+  podRot = { id: e.pointerId, c, a: podAngle(e, c), raw: playPos,
+             turned: 0, seekedAt: 0, at: performance.now(), lastCut: null };
+  $('#podRing').classList.add('spin');
+  try { $('#podRing').setPointerCapture(e.pointerId); } catch (err) {}
+});
+
+$('#podRing').addEventListener('pointermove', e => {
+  if (!podRot || e.pointerId !== podRot.id) return;
+  const a = podAngle(e, podRot.c);
+  /* unwrap across the ±π seam, or every pass over the top would read as a
+     near-full turn backwards */
+  let d = a - podRot.a;
+  if (d > Math.PI) d -= Math.PI * 2;
+  if (d < -Math.PI) d += Math.PI * 2;
+  podRot.a = a;
+  podRot.turned += Math.abs(d);
+
+  const now = performance.now();
+  const dt = Math.max(now - podRot.at, 1) / 1000;
+  podRot.at = now;
+  /* spin faster and the song runs faster under your thumb, the way the
+     original scrolled a long list */
+  const speed = Math.abs(d) / dt;
+  const gain = clamp(1 + (speed - POD_SPIN0) / (POD_SPIN1 - POD_SPIN0) * (POD_GAIN - 1), 1, POD_GAIN);
+  podRot.raw = clamp(podRot.raw + d / (Math.PI * 2) * POD_TURN * gain, 0, P.duration);
+
+  /* Magnetism reads from raw and never writes back to it, so a cut holds the
+     playhead without trapping it: keep turning and raw walks out of range. */
+  const t = nearestCut(podRot.raw, POD_DETENT);
+  const held = t !== podRot.raw;
+  $('#podRing').classList.toggle('mag', held);
+  if (held && t !== podRot.lastCut) {
+    podRot.lastCut = t;
+    try { if (navigator.vibrate) navigator.vibrate(8); } catch (err) {}
+  }
+  if (!held) podRot.lastCut = null;
+
+  setPh(false);
+  playPos = t; lastPos = t;
+  updatePos(); paintPod(); movePodHead();
+  /* the line moves every frame; the player is a network call, so it does not */
+  if (hasClock() && now - podRot.seekedAt > 70) { srcSeek(t); podRot.seekedAt = now; }
+});
+
+const podRingUp = e => {
+  if (!podRot || (e && e.pointerId !== podRot.id)) return;
+  const rot = podRot; podRot = null;
+  const ring = $('#podRing');
+  ring.classList.remove('spin', 'mag');
+  /* barely moved: this was a press on a printed quadrant, not a spin */
+  if (rot.turned < .08 && e) {
+    const q = podQuadrant(e, rot.c);
+    ring.classList.add('press-' + q);
+    setTimeout(() => ring.classList.remove('press-' + q), 150);
+    if (q === 'menu') return setPod(false);
+    if (q === 'prev') stepCut(-1);
+    else if (q === 'next') stepCut(1);
+    else togglePlay();
+    paintPod();
+    return;
+  }
+  if (hasClock()) srcSeek(playPos);   /* land exactly where the line ended up */
+};
+$('#podRing').addEventListener('pointerup', podRingUp);
+$('#podRing').addEventListener('pointercancel', podRingUp);
+
+/* ── the centre button, and the pads that replace it on a tablet ── */
+function podPressStart(el0, key) {
+  const start = clamp(playPos, 0, Math.max(P.duration - .001, 0));
+  podHold = { el: el0, key, start, at: performance.now(), spanning: false };
+  podHold.timer = setTimeout(() => {
+    if (!podHold) return;
+    podHold.spanning = true;
+    el0.classList.add('holding');
+  }, POD_HOLD);
+}
+function podPressEnd() {
+  if (!podHold) return;
+  const h = podHold; podHold = null;
+  clearTimeout(h.timer);
+  h.el.classList.remove('holding');
+  const T = podTrack(h.key);
+  if (!T) { toast('Add a track first'); return; }
+  /* a tap is a moment, a hold is a passage — the end of a held mark is
+     wherever the song had got to when the thumb came off */
+  const e = h.spanning
+    ? clamp(Math.max(playPos, h.start + MIN_EXT), 0, P.duration)
+    : Math.min(h.start + POD_TAP, P.duration);
+  addNote(T, h.start, Math.max(e, h.start + MIN_EXT), podChip);
+  h.el.classList.add('flash');
+  setTimeout(() => h.el.classList.remove('flash'), 400);
+  try { if (navigator.vibrate) navigator.vibrate(h.spanning ? [6, 40, 10] : 12); } catch (err) {}
+  $('#podSaid').innerHTML = '';
+  const said = $('#podSaid');
+  said.append(document.createTextNode((podChip || 'marked') + ' · '));
+  const b = el('b'); b.textContent = fmt(h.start) + (h.spanning ? '–' + fmt(e) : '');
+  said.appendChild(b);
+  paintPodPads(); paintPodSpark(); paintPodTicks(); paintPodRecent(); paintPod();
+}
+const podCentre = $('#podCentre');
+podCentre.addEventListener('pointerdown', e => {
+  e.preventDefault(); e.stopPropagation();
+  try { podCentre.setPointerCapture(e.pointerId); } catch (err) {}
+  podPressStart(podCentre, null);
+});
+podCentre.addEventListener('pointerup', e => { e.stopPropagation(); podPressEnd(); });
+podCentre.addEventListener('pointercancel', () => { if (podHold) { clearTimeout(podHold.timer); podHold.el.classList.remove('holding'); podHold = null; } });
+
+/* pads: one per track, so several tracks can be marked in a single pass —
+   the thing a phone with one armed track and one button cannot do */
+$('#podPads').addEventListener('pointerdown', e => {
+  const pad = e.target.closest('.pod-pad'); if (!pad) return;
+  e.preventDefault();
+  try { pad.setPointerCapture(e.pointerId); } catch (err) {}
+  pad.classList.add('hit');
+  podPressStart(pad, pad.dataset.key);
+});
+$('#podPads').addEventListener('pointerup', e => {
+  const pad = e.target.closest('.pod-pad'); if (!pad) return;
+  pad.classList.remove('hit');
+  podPressEnd();
+});
+
+$('#podLoop').onclick = () => {
+  if (loopRange) { setLoop(null); return; }
+  const sg = segAt(clamp(playPos, 0, Math.max(P.duration - .001, 0)));
+  if (!sg || sg[1] - sg[0] < .5) return toast('This section is too short to loop');
+  setLoop([sg[0], sg[1]]);
+  if (!playing) { seek(sg[0]); startPlay(); }
+};
+function setLoop(range) {
+  loopRange = range;
+  $('#podLoop').classList.toggle('on', !!range);
+  $('#podLoop').textContent = range ? '⟲ looping' : '⟲ loop section';
+  paintPodSpark();
+  /* Said once, plainly: a YouTube seek is a network round trip and ytTime()
+     interpolates between the player's coarse updates, so the seam is audible.
+     A loaded file loops cleanly. Better to know than to think it is broken. */
+  if (range && hasYT() && !loopWarned) {
+    loopWarned = true;
+    toast('Looping a YouTube video jumps roughly — a loaded audio file loops clean');
+  }
+}
+
+$('#podMirror').onclick = () => {
+  podLeft = !podLeft;
+  document.body.classList.toggle('pod-left', podLeft);
+  try { localStorage.setItem(PODKEY, podLeft ? '1' : '0'); } catch (e) {}
+  toast(podLeft ? 'wheel on the left' : 'wheel on the right');
+};
+
+/* ── entering and leaving ── */
+function setPod(on) {
+  if (on) {
+    /* A project captured on a phone has no tracks at all — addTrack only runs
+       when !compact — and marking onto nothing is the same dead end that
+       openNote() hits with "Add a track first". Seed one rather than refuse. */
+    if (!curLayer().tracks.length) { addTrack('Notes'); render(); }
+    if (!armedKey) { const t = curLayer().tracks[0]; if (t) armTrack(tkey(t)); }
+  }
+  podOn = on;
+  document.body.classList.toggle('pod', on);
+  paintPodOffer();
+  document.body.classList.toggle('pod-left', on && podLeft);
+  if (on) {
+    if (noteOpen) closeNote();          /* the keyboard has no business here */
+    if (liveMode) setLive(false);
+    paintPodChips(); paintPodPads(); paintPodSpark(); paintPodTicks(); paintPodRecent(); paintPod();
+    podFullscreen();
+  } else {
+    if (playing) stopPlay();
+    setLoop(null);
+    podHold = null; podRot = null;
+    if (document.fullscreenElement) { try { document.exitFullscreen(); } catch (e) {} }
+  }
+}
+/* Pod mode follows the pointer, not the pixel count. isCompact() answers "is
+   this screen small" — a landscape tablet fails that test and would be handed
+   the keyboard-shaped editor despite having no keyboard. */
+/* ── which device is this, actually ───────────────────
+   Sniffing gets this wrong in both directions — a tablet with a keyboard
+   reads as a laptop, a touchscreen laptop reads as a tablet — and the answer
+   decides which of three quite different UIs someone gets. So it is asked,
+   once, with the guess offered rather than imposed, and one answer settles
+   both the compact-capture and pod-mode preferences instead of leaving them
+   to be found separately in a menu. */
+const DEVKEY = 'tapline.device';
+let devicePref = null;
+try { const v = localStorage.getItem(DEVKEY); if (v === 'phone' || v === 'tablet' || v === 'laptop') devicePref = v; } catch (e) {}
+
+const guessDevice = () => !podCoarse() ? 'laptop' : (smallScreen() ? 'phone' : 'tablet');
+
+function setDevice(kind, opts) {
+  devicePref = kind;
+  try { localStorage.setItem(DEVKEY, kind); } catch (e) {}
+  /* One answer, both switches — that is the point of asking. Compact capture
+     is about screen size, the wheel is about not having a keyboard, and a
+     tablet wants the second without the first. */
+  setCompact(kind === 'phone', true);
+  setPodPref(kind !== 'laptop');
+  closeDevAsk();
+  if (!(opts && opts.quiet)) {
+    toast(kind === 'laptop' ? 'Set up for a laptop — full editor'
+      : kind === 'tablet' ? 'Set up for a tablet — timeline and pads'
+      : 'Set up for a phone — tap to capture, wheel for notes');
+  }
+}
+function openDevAsk() {
+  const g = guessDevice();
+  $('#devGuess').textContent = g === 'laptop'
+    ? 'This looks like a laptop. Pick another if it is not — it changes which controls you get, not what gets saved.'
+    : g === 'tablet'
+      ? 'This looks like a tablet. Pick another if it is not — it changes which controls you get, not what gets saved.'
+      : 'This looks like a phone. Pick another if it is not — it changes which controls you get, not what gets saved.';
+  document.querySelectorAll('.dev-opt').forEach(b =>
+    b.classList.toggle('guess', b.dataset.kind === g));
+  $('#devAsk').classList.add('on');
+}
+const closeDevAsk = () => $('#devAsk').classList.remove('on');
+document.querySelectorAll('.dev-opt').forEach(b =>
+  b.onclick = () => setDevice(b.dataset.kind));
+/* "decide later" must not mean "ask me on every load" — it stands the
+   question down for this device and leaves the menu as the way back to it */
+$('#devSkip').onclick = () => { try { localStorage.setItem(DEVKEY, 'skip'); } catch (e) {} closeDevAsk(); };
+$('#devAsk').onclick = e => { if (e.target.id === 'devAsk') closeDevAsk(); };
+/* Asked when someone arrives, which on the account build is after signing in
+   and on the static build is once the first project is on screen. */
+function askDeviceOnce() {
+  let stored = null;
+  try { stored = localStorage.getItem(DEVKEY); } catch (e) {}
+  if (stored) return;
+  openDevAsk();
+}
+
+/* Availability follows the pointer by default, but a preference overrides it
+   both ways. Sniffing alone meant the wheel was unreachable on a laptop —
+   including for whoever is building it — and a device that misreports its
+   pointer had no way back. Same three-state shape as compactPref. */
+const PODPREF = 'tapline.podpref';
+let podPref = null;                    /* null = follow the pointer */
+try { const v = localStorage.getItem(PODPREF); if (v === '0' || v === '1') podPref = v === '1'; } catch (e) {}
+const podOffer = () => podPref === null ? podCoarse() : podPref;
+function setPodPref(v) {
+  podPref = v;
+  try { localStorage.setItem(PODPREF, v ? '1' : '0'); } catch (e) {}
+  paintPodOffer();
+}
+$('#podBtn').onclick = () => { if (!podOn) go('edit'); setPod(!podOn); };
+$('#mDevice').onclick = e => {
+  e.stopPropagation();
+  $('#menu').classList.remove('open');
+  openDevAsk();
+};
+$('#mPod').onclick = e => {
+  e.stopPropagation();
+  $('#menu').classList.remove('open');
+  /* asking for it by name is a preference, so the toolbar button stays put
+     afterwards rather than vanishing again on a laptop */
+  if (podOn) { setPod(false); return; }        /* the label promises a way out */
+  if (!podOffer()) setPodPref(true);
+  if (!P.markers || !P.markers.length) { toast('Capture some cuts first — the wheel works on a timeline'); return; }
+  go('edit'); setPod(true);
+};
+$('#sdPod').onclick = () => { go('edit'); setPod(true); };
+function paintPodOffer() {
+  const show = podOffer();
+  const b = $('#podBtn'); if (b) b.style.display = show ? '' : 'none';
+  const s = $('#sdPod'); if (s) s.style.display = show ? '' : 'none';
+  /* the menu entry is always there — it is the way in when nothing else is */
+  const m = $('#mPod');
+  if (m) m.textContent = podOn ? '◉ Leave pod mode' : '◉ Open pod mode';
+  const d = $('#mDevice');
+  if (d) d.textContent = 'Device: ' + (devicePref && devicePref !== 'skip' ? devicePref : 'not set');
+}
+/* Fullscreen has to be asked for inside the gesture that opened pod mode, it
+   is refused outright on some browsers, and iOS support is uneven — so it is
+   attempted, never relied on. Every layout here works with chrome present. */
+function podFullscreen() {
+  if (!podLandscape() || document.fullscreenElement) return;
+  const el0 = document.documentElement;
+  const req = el0.requestFullscreen || el0.webkitRequestFullscreen;
+  if (!req) return;
+  try { const p = req.call(el0); if (p && p.catch) p.catch(() => {}); } catch (e) {}
+}
+/* leaving fullscreen by a system gesture should leave the mode too, rather
+   than stranding someone in a layout whose way out just scrolled off */
+document.addEventListener('fullscreenchange', () => {
+  if (!document.fullscreenElement && podOn && podLandscape()) setPod(false);
+});
+/* a tablet gets rotated mid-session; the wheel must not end up where the
+   thumb no longer is */
+try {
+  matchMedia('(orientation: landscape)').addEventListener('change', () => {
+    if (!podOn) return;
+    paintPodPads(); paintPodSpark(); paintPodTicks(); paintPodRecent(); paintPod();
+  });
+} catch (e) {}
 
 /* the switch: play and write */
 function setLive(on) {
@@ -6384,9 +7517,13 @@ function syncTopbar() {
   document.documentElement.style.setProperty('--topbar', $('#top').offsetHeight + 'px');
 }
 addEventListener('resize', syncTopbar);
+/* a laptop that grows a touchscreen, or a window dragged to another display,
+   can change the answer — so the offer is repainted rather than decided once */
+addEventListener('resize', () => { paintPodOffer(); if (podOn) paintPodSpark(); });
 
 (async function boot() {
   paintAdmin();
+  paintPodOffer();
   sizeCanvas(); rafId = requestAnimationFrame(frame);
 
   const read = await store.read(LIBKEY);
