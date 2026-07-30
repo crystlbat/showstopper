@@ -352,6 +352,46 @@ body:not(.editing) .drop .edit-only{display:none}
   border-left:1px solid var(--line2);letter-spacing:.08em;
 }
 
+/* ── the device question ──────────────────────────────
+   Three answers, asked once, remembered — and reachable again from the menu,
+   because a phone in a stand becomes a tablet and nobody wants to clear
+   storage over it. */
+#devAsk{
+  position:fixed;inset:0;z-index:58;display:none;align-items:center;justify-content:center;padding:20px;
+  background:rgba(10,8,18,.72);backdrop-filter:blur(10px);
+}
+#devAsk.on{display:flex}
+.dev-card{
+  width:min(460px,100%);padding:26px;border-radius:16px;text-align:center;
+  border:1px solid var(--line2);background:linear-gradient(180deg,rgba(48,42,76,.98),rgba(28,25,45,.98));
+  box-shadow:0 30px 80px rgba(0,0,0,.7);
+}
+.dev-card h3{
+  margin:8px 0 6px;font-family:var(--txt);font-size:22px;font-weight:600;
+  letter-spacing:-.02em;color:var(--text);
+}
+.dev-card p{margin:0 0 18px;font-size:13px;color:var(--dim);line-height:1.5}
+.dev-opts{display:flex;flex-direction:column;gap:9px}
+.dev-opt{
+  display:flex;flex-direction:column;align-items:flex-start;gap:3px;padding:14px 16px;
+  border-radius:11px;border:1px solid var(--line2);background:rgba(255,255,255,.035);
+  text-align:left;transition:.14s;
+}
+.dev-opt:hover{background:rgba(255,255,255,.075);border-color:var(--cut)}
+.dev-opt b{font-family:var(--txt);font-size:15.5px;font-weight:600;color:var(--text);letter-spacing:-.01em}
+.dev-opt i{font-style:normal;font-size:12px;color:var(--faint)}
+/* the guess, offered rather than imposed */
+.dev-opt.guess{border-color:var(--cut);background:color-mix(in srgb,var(--cut) 12%,transparent)}
+.dev-opt.guess b::after{
+  content:'looks like this';margin-left:9px;font-family:var(--ui);font-size:8.5px;
+  letter-spacing:.16em;text-transform:uppercase;color:var(--cut);font-weight:400;
+}
+.dev-skip{
+  margin-top:14px;font-family:var(--ui);font-size:9.5px;letter-spacing:.16em;
+  text-transform:uppercase;color:var(--faint);padding:8px 10px;
+}
+.dev-skip:hover{color:var(--dim)}
+
 /* ── pod mode: a click wheel ─────────────────────────
    The one control you can work without looking, which is the whole point —
    on a phone your eyes and ears belong to the song, not to aiming at a 10px
@@ -593,7 +633,7 @@ body.pod .menu,body.pod #top,body.pod #notebar{display:none}
    thumbs free, so the wheel takes one bottom corner, a pad per track takes
    the other, and the real timeline stays on screen between them. A phone
    marks one track at a time; this marks several in one pass. */
-@media (orientation:landscape) and (pointer:coarse){
+@media (orientation:landscape) and (min-height:600px){
   #pod{
     background:none;backdrop-filter:none;pointer-events:none;
     padding:0 calc(10px + env(safe-area-inset-right)) calc(10px + env(safe-area-inset-bottom)) calc(10px + env(safe-area-inset-left));
@@ -1738,6 +1778,8 @@ button{touch-action:manipulation;-webkit-tap-highlight-color:transparent}
     <button id="mMidi">Export Ableton (.als)</button>
     <hr>
     <button id="mCompact">Compact capture: off</button>
+    <button id="mPod">◉ Open pod mode</button>
+    <button id="mDevice">Device: —</button>
     <button id="mLogs">Technical log</button>
     <button id="mRestore">Restore backup<span id="mRestoreWhen"></span></button>
     <hr>
@@ -1839,6 +1881,29 @@ button{touch-action:manipulation;-webkit-tap-highlight-color:transparent}
      still rendered underneath: a phone covers it completely, a landscape
      tablet leaves the ruler and lanes on show and only takes the corners.
      One implementation, two appearances, and render() keeps working. -->
+<!-- Asked once, because guessing from the pointer gets it wrong often enough
+     to matter: a tablet with a keyboard reads as a laptop, a laptop with a
+     touchscreen reads as a tablet, and only the person holding it knows. -->
+<div id="devAsk">
+  <div class="dev-card">
+    <span class="eyebrow">before you start</span>
+    <h3>What are you working on?</h3>
+    <p id="devGuess">—</p>
+    <div class="dev-opts">
+      <button class="dev-opt" data-kind="phone">
+        <b>Phone</b><i>tap to capture · the wheel for notes</i>
+      </button>
+      <button class="dev-opt" data-kind="tablet">
+        <b>Tablet</b><i>timeline plus a pad per track</i>
+      </button>
+      <button class="dev-opt" data-kind="laptop">
+        <b>Laptop</b><i>the full editor, keyboard and all</i>
+      </button>
+    </div>
+    <button class="dev-skip" id="devSkip">decide later</button>
+  </div>
+</div>
+
 <div id="pod">
   <div class="pod-screen">
     <div class="pod-time"><b id="podTime">0:00</b><span id="podTotal">/ 0:00</span></div>
@@ -2174,11 +2239,11 @@ button{touch-action:manipulation;-webkit-tap-highlight-color:transparent}
     <input id="sdName" class="sd-name" placeholder="name this one…" autocomplete="off">
     <div class="sd-acts">
       <button class="sd-btn go" id="sdSend">Send</button>
+      <button class="sd-btn" id="sdPod">◉ Notes on the wheel</button>
       <button class="sd-btn" id="sdAgain">Record again</button>
     </div>
     <div class="sd-state" id="sdState"></div>
     <div class="sd-more">
-      <button id="sdPod">Add notes with the wheel</button>
       <button id="sdEditor">Open full editor</button>
       <button id="sdHome">Home</button>
     </div>
@@ -2642,11 +2707,13 @@ let compactPref = null;                 /* null = auto, true/false = user's choi
 try { const v = localStorage.getItem(CMPKEY); if (v === '0' || v === '1') compactPref = v === '1'; } catch (e) {}
 const smallScreen = () => Math.min(innerWidth, innerHeight) <= 500 || innerWidth <= 620;
 const isCompact = () => compactPref === null ? smallScreen() : compactPref;
-function setCompact(v) {
+function setCompact(v, quiet) {
   compactPref = v;
   try { localStorage.setItem(CMPKEY, v ? '1' : '0'); } catch (e) {}
   paintCompactMenu();
-  toast(v ? 'compact capture on' : 'full editor mode');
+  /* the device chooser sets this as one part of a bigger answer and says so
+     in its own words, so it asks for silence here rather than two toasts */
+  if (!quiet) toast(v ? 'compact capture on' : 'full editor mode');
 }
 /* where "get back to work" lands: the editor normally, the hand-off screen
    on a device too small to use it (the editor stays one tap away) */
@@ -2839,7 +2906,19 @@ $('#sdMore').onclick = () => { $('#send').classList.remove('done'); startRetake(
 $('#sdOpen').onclick = () => go('edit');
 $('#sdDoneHome').onclick = () => go('home');
 $('#sdAgain').onclick = () => startRetake();
-$('#sdEditor').onclick = () => go('edit');
+/* Opening a project on a phone used to land in the laptop editor: a
+   keyboard-shaped screen on a device with no keyboard, reached by a button
+   that only promised "full". Where that editor genuinely does not work — a
+   coarse pointer on a screen small enough for isCompact() — the wheel comes
+   up with it, and pod's MENU quadrant drops to the bare editor for anyone who
+   actually wanted it. A tablet keeps the choice: its editor is usable, so
+   ◉ Pod stays a button rather than a destiny. */
+const podIsTheWayIn = () => podCoarse() && isCompact();
+function enterEditor() {
+  go('edit');
+  if (podIsTheWayIn() && !podOn) setPod(true);
+}
+$('#sdEditor').onclick = enterEditor;
 $('#sdHome').onclick = () => go('home');
 
 /* ═══ origin — whose work is this? ═══════════════════════════════════
@@ -4059,6 +4138,7 @@ async function cloudAuth() {
     slog('ok', 'signed in as ' + cloud.user);
     paintCloud();
     await cloudPull(true);
+    askDeviceOnce();
     /* Anything made before signing in is real work — hand it over, don't
        strand it on the device. */
     if (lib.scenes.some(s => !s.deleted)) await cloudSave({ quiet: true });
@@ -4335,6 +4415,9 @@ async function cloudBoot() {
     closeAuth();
     paintSync();
     slog('info', 'ready', srv.on ? 'sync connected · pull/push is manual' : 'sync not connected · local only');
+    /* the static build never signs in, so arriving is the only moment there
+       is to ask — the account build asks once the account is known instead */
+    askDeviceOnce();
     return;
   }
   document.body.classList.add('cloud');
@@ -4354,6 +4437,7 @@ async function cloudBoot() {
     slog('info', 'ready', 'signed in as ' + cloud.user + ' · saving happens on its own');
     paintCloud();
     await cloudPull(true);
+    askDeviceOnce();
   } else {
     slog('info', 'ready', 'not signed in · projects are on this device until you do');
     cloudMode = saved.user ? 'in' : 'up';
@@ -6391,8 +6475,12 @@ let podPage = 0;
 const podCoarse = () => {
   try { return matchMedia('(pointer: coarse)').matches; } catch (e) { return false; }
 };
+/* Must agree with the media query below, or script and stylesheet disagree
+   about which layout is on screen. Height rather than pointer: the console
+   needs room for a timeline between the two decks, which a phone held
+   sideways does not have and a laptop does. */
 const podLandscape = () => {
-  try { return matchMedia('(orientation: landscape) and (pointer: coarse)').matches; } catch (e) { return false; }
+  try { return matchMedia('(orientation: landscape) and (min-height: 600px)').matches; } catch (e) { return false; }
 };
 
 /* Labels you have actually used, most-used first, across the whole library —
@@ -6837,6 +6925,7 @@ function setPod(on) {
   }
   podOn = on;
   document.body.classList.toggle('pod', on);
+  paintPodOffer();
   document.body.classList.toggle('pod-left', on && podLeft);
   if (on) {
     if (noteOpen) closeNote();          /* the keyboard has no business here */
@@ -6853,13 +6942,100 @@ function setPod(on) {
 /* Pod mode follows the pointer, not the pixel count. isCompact() answers "is
    this screen small" — a landscape tablet fails that test and would be handed
    the keyboard-shaped editor despite having no keyboard. */
-const podOffer = () => podCoarse();
+/* ── which device is this, actually ───────────────────
+   Sniffing gets this wrong in both directions — a tablet with a keyboard
+   reads as a laptop, a touchscreen laptop reads as a tablet — and the answer
+   decides which of three quite different UIs someone gets. So it is asked,
+   once, with the guess offered rather than imposed, and one answer settles
+   both the compact-capture and pod-mode preferences instead of leaving them
+   to be found separately in a menu. */
+const DEVKEY = 'tapline.device';
+let devicePref = null;
+try { const v = localStorage.getItem(DEVKEY); if (v === 'phone' || v === 'tablet' || v === 'laptop') devicePref = v; } catch (e) {}
+
+const guessDevice = () => !podCoarse() ? 'laptop' : (smallScreen() ? 'phone' : 'tablet');
+
+function setDevice(kind, opts) {
+  devicePref = kind;
+  try { localStorage.setItem(DEVKEY, kind); } catch (e) {}
+  /* One answer, both switches — that is the point of asking. Compact capture
+     is about screen size, the wheel is about not having a keyboard, and a
+     tablet wants the second without the first. */
+  setCompact(kind === 'phone', true);
+  setPodPref(kind !== 'laptop');
+  closeDevAsk();
+  if (!(opts && opts.quiet)) {
+    toast(kind === 'laptop' ? 'Set up for a laptop — full editor'
+      : kind === 'tablet' ? 'Set up for a tablet — timeline and pads'
+      : 'Set up for a phone — tap to capture, wheel for notes');
+  }
+}
+function openDevAsk() {
+  const g = guessDevice();
+  $('#devGuess').textContent = g === 'laptop'
+    ? 'This looks like a laptop. Pick another if it is not — it changes which controls you get, not what gets saved.'
+    : g === 'tablet'
+      ? 'This looks like a tablet. Pick another if it is not — it changes which controls you get, not what gets saved.'
+      : 'This looks like a phone. Pick another if it is not — it changes which controls you get, not what gets saved.';
+  document.querySelectorAll('.dev-opt').forEach(b =>
+    b.classList.toggle('guess', b.dataset.kind === g));
+  $('#devAsk').classList.add('on');
+}
+const closeDevAsk = () => $('#devAsk').classList.remove('on');
+document.querySelectorAll('.dev-opt').forEach(b =>
+  b.onclick = () => setDevice(b.dataset.kind));
+/* "decide later" must not mean "ask me on every load" — it stands the
+   question down for this device and leaves the menu as the way back to it */
+$('#devSkip').onclick = () => { try { localStorage.setItem(DEVKEY, 'skip'); } catch (e) {} closeDevAsk(); };
+$('#devAsk').onclick = e => { if (e.target.id === 'devAsk') closeDevAsk(); };
+/* Asked when someone arrives, which on the account build is after signing in
+   and on the static build is once the first project is on screen. */
+function askDeviceOnce() {
+  let stored = null;
+  try { stored = localStorage.getItem(DEVKEY); } catch (e) {}
+  if (stored) return;
+  openDevAsk();
+}
+
+/* Availability follows the pointer by default, but a preference overrides it
+   both ways. Sniffing alone meant the wheel was unreachable on a laptop —
+   including for whoever is building it — and a device that misreports its
+   pointer had no way back. Same three-state shape as compactPref. */
+const PODPREF = 'tapline.podpref';
+let podPref = null;                    /* null = follow the pointer */
+try { const v = localStorage.getItem(PODPREF); if (v === '0' || v === '1') podPref = v === '1'; } catch (e) {}
+const podOffer = () => podPref === null ? podCoarse() : podPref;
+function setPodPref(v) {
+  podPref = v;
+  try { localStorage.setItem(PODPREF, v ? '1' : '0'); } catch (e) {}
+  paintPodOffer();
+}
 $('#podBtn').onclick = () => { if (!podOn) go('edit'); setPod(!podOn); };
+$('#mDevice').onclick = e => {
+  e.stopPropagation();
+  $('#menu').classList.remove('open');
+  openDevAsk();
+};
+$('#mPod').onclick = e => {
+  e.stopPropagation();
+  $('#menu').classList.remove('open');
+  /* asking for it by name is a preference, so the toolbar button stays put
+     afterwards rather than vanishing again on a laptop */
+  if (podOn) { setPod(false); return; }        /* the label promises a way out */
+  if (!podOffer()) setPodPref(true);
+  if (!P.markers || !P.markers.length) { toast('Capture some cuts first — the wheel works on a timeline'); return; }
+  go('edit'); setPod(true);
+};
 $('#sdPod').onclick = () => { go('edit'); setPod(true); };
 function paintPodOffer() {
   const show = podOffer();
   const b = $('#podBtn'); if (b) b.style.display = show ? '' : 'none';
   const s = $('#sdPod'); if (s) s.style.display = show ? '' : 'none';
+  /* the menu entry is always there — it is the way in when nothing else is */
+  const m = $('#mPod');
+  if (m) m.textContent = podOn ? '◉ Leave pod mode' : '◉ Open pod mode';
+  const d = $('#mDevice');
+  if (d) d.textContent = 'Device: ' + (devicePref && devicePref !== 'skip' ? devicePref : 'not set');
 }
 /* Fullscreen has to be asked for inside the gesture that opened pod mode, it
    is refused outright on some browsers, and iOS support is uneven — so it is
