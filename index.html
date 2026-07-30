@@ -400,10 +400,20 @@ body:not(.editing) .drop .edit-only{display:none}
 #pod{
   --c:var(--cut);
   position:fixed;inset:0;z-index:24;display:none;flex-direction:column;
-  padding:calc(14px + env(safe-area-inset-top)) 16px calc(16px + env(safe-area-inset-bottom));
+  /* inset:0 resolves against the LAYOUT viewport, which on a mobile browser
+     with a dynamic toolbar is taller than what you can see — which is exactly
+     how the bottom of the wheel ended up under the nav bar. dvh ends where
+     the screen does; the line above stays as the fallback. */
+  height:100dvh;
+  padding:calc(12px + env(safe-area-inset-top)) 16px calc(12px + env(safe-area-inset-bottom));
+  /* The armed track owns the screen. --c was being computed and then barely
+     spent — a thin arc and two accents — which is most of why this read as
+     grey pills on a purple field. Switching track should visibly change the
+     room you are in, which is also what makes the selector self-evident. */
   background:
-    radial-gradient(80% 46% at 50% 104%,color-mix(in srgb,var(--c) 22%,transparent),transparent 70%),
-    radial-gradient(120% 90% at 50% 6%,rgba(64,56,104,.97),rgba(16,14,27,.99));
+    radial-gradient(90% 52% at 50% 106%,color-mix(in srgb,var(--c) 40%,transparent),transparent 72%),
+    radial-gradient(70% 34% at 50% -6%,color-mix(in srgb,var(--c) 16%,transparent),transparent 70%),
+    radial-gradient(120% 90% at 50% 6%,rgba(60,53,99,.97),rgba(14,12,24,.99));
   backdrop-filter:blur(6px);touch-action:none;user-select:none;
 }
 body.pod #pod{display:flex}
@@ -413,8 +423,40 @@ body.pod #editor,body.pod #toolbar,body.pod #tlbar,body.pod #layerbar{pointer-ev
    where the pod is the whole screen — it has to be told to stand down, or a
    stray ⋯ floats over a mode that is supposed to be nothing but the wheel */
 body.pod .menu,body.pod #top,body.pod #notebar{display:none}
+/* #ytDock is z-index 17 and the pod overlay is 24, so the link panel rendered
+   behind it — there was no way to paste an audio link without leaving. */
+body.pod #ytDock{z-index:26}
 
-.pod-screen{flex:none;text-align:center;padding:6px 0 12px}
+/* The readout scrolls; the controls are pinned. Only the source line, the
+   clock, the section and the map live in here — every one of them something
+   you read. The track pill and the chip row are things you press, and both
+   got sliced in half by the scroll edge in turn before landing on that rule. Budgeting pixels
+   between the clock, the map, the pill row and the chips does not hold — a
+   taller map and one new row pushed the wheel back through the bottom of the
+   screen, which is the fault this whole file already fixed once. Give the
+   wheel a floor it cannot be shoved through instead. */
+.pod-top{
+  flex:1;min-height:0;overflow-y:auto;display:flex;flex-direction:column;scrollbar-width:none;
+  /* if it does have to scroll, let it fade out rather than cut */
+  -webkit-mask:linear-gradient(180deg,#000 calc(100% - 14px),transparent);
+  mask:linear-gradient(180deg,#000 calc(100% - 14px),transparent);
+}
+.pod-top::-webkit-scrollbar{display:none}
+.pod-screen{flex:none;text-align:center;padding:2px 0 10px;min-height:0}
+/* Which song this is, and the way to change it. Without this there is no
+   route to the link field at all from inside pod mode: #ytDock sits below the
+   overlay and the ⋯ menu is hidden on a phone. */
+/* Quiet on purpose: this is changed once a session, and it was competing at
+   equal weight with the controls used every few seconds. */
+.pod-src{
+  display:inline-flex;align-items:center;gap:7px;max-width:86%;margin-bottom:6px;
+  padding:7px 13px;min-height:34px;border-radius:99px;border:1px solid transparent;
+  background:rgba(255,255,255,.03);font-family:var(--ui);font-size:11px;color:var(--faint);
+}
+.pod-src i{font-style:normal;color:var(--c);font-size:13px}
+.pod-src span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pod-src:active{background:rgba(255,255,255,.09)}
+
 .pod-time{font-family:var(--mono);display:flex;align-items:baseline;justify-content:center;gap:8px}
 .pod-time b{
   font-size:clamp(38px,13vw,62px);font-weight:400;letter-spacing:-.02em;color:var(--text);
@@ -428,10 +470,13 @@ body.pod .menu,body.pod #top,body.pod #notebar{display:none}
    something rather than a grey dial on a gradient. Real audio when a file is
    loaded; otherwise a ribbon drawn from the project's own shape — where the
    cuts and notes cluster — which is honest about what it knows. */
+/* The one thing on the screen that is about the song. It was a 78px strip
+   between two rows of grey pills; it should look like the subject. */
 .pod-map{
-  position:relative;height:78px;margin:14px auto 0;max-width:520px;width:100%;
-  border-radius:12px;overflow:hidden;border:1px solid var(--line2);
-  background:linear-gradient(180deg,rgba(0,0,0,.30),rgba(0,0,0,.14));
+  position:relative;height:118px;margin:12px auto 0;max-width:520px;width:100%;
+  border-radius:18px;overflow:hidden;border:1px solid var(--line2);
+  background:linear-gradient(180deg,rgba(0,0,0,.38),rgba(0,0,0,.16));
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.07),0 12px 34px rgba(0,0,0,.42);
 }
 .pod-map canvas{display:block;width:100%;height:100%}
 /* everything not yet reached is held back, so the played part reads as lit.
@@ -470,14 +515,27 @@ body.pod .menu,body.pod #top,body.pod #notebar{display:none}
 
 /* one-tap labels: naming without a keyboard, which is the difference
    between noting a moment and missing the next one */
-.pod-chips{
-  flex:none;display:flex;flex-wrap:wrap;gap:8px;justify-content:center;
-  padding:2px 0 10px;max-height:23vh;overflow-y:auto;
+/* Thirteen labels wrapped into five rows and took 23% of a real phone, which
+   is what pushed the wheel off the bottom. One row, swiped sideways, with the
+   edges faded so it is obvious there is more. */
+.pod-chipwrap{
+  flex:none;position:relative;margin:0 -16px;padding:2px 0 8px;
+  -webkit-mask:linear-gradient(90deg,transparent,#000 22px,#000 calc(100% - 22px),transparent);
+  mask:linear-gradient(90deg,transparent,#000 22px,#000 calc(100% - 22px),transparent);
 }
+.pod-chips{
+  display:flex;flex-wrap:nowrap;gap:8px;padding:0 16px;
+  overflow-x:auto;overflow-y:hidden;scroll-snap-type:x proximity;
+  scrollbar-width:none;-webkit-overflow-scrolling:touch;
+}
+.pod-chips::-webkit-scrollbar{display:none}
 .pod-chip{
   font-family:var(--ui);font-size:12px;font-weight:600;color:var(--dim);
-  padding:10px 14px;min-height:40px;border-radius:99px;border:1px solid var(--line2);
-  background:rgba(255,255,255,.04);transition:.14s;max-width:46vw;
+  padding:11px 16px;min-height:44px;border-radius:99px;border:1px solid var(--line2);
+  background:rgba(255,255,255,.04);transition:.14s;transform:none;
+  /* a label like "Groove change, samy rythm" must not be able to set the
+     height of the row every other label lives in */
+  max-width:40vw;flex:none;scroll-snap-align:center;
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
 }
 .pod-chip.on{
@@ -508,19 +566,100 @@ body.pod .menu,body.pod #top,body.pod #notebar{display:none}
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
 }
 .pod-rec.unnamed b{color:var(--faint);font-style:italic}
+.pod-rec-x{
+  margin-left:auto;flex:none;color:var(--faint);font-size:13px;padding:6px 8px;
+  border-radius:8px;min-width:34px;min-height:34px;
+}
+.pod-rec-x:active{color:var(--play);background:rgba(255,255,255,.07)}
 .pod-recent-none{
   font-family:var(--ui);font-size:9.5px;letter-spacing:.16em;text-transform:uppercase;
   color:var(--faint);text-align:center;padding:14px 0;
 }
+
+/* One row, two jobs: which track a mark lands on, and how many there are.
+   The pill is the loudest thing on the screen after the clock, because it is
+   the answer to "where is this going" — a question the phone could not
+   previously answer at all. */
+.pod-trackrow{flex:none;display:flex;gap:8px;align-items:stretch;margin:12px 0 4px}
+.pod-track{
+  flex:1;min-width:0;display:flex;align-items:center;gap:11px;padding:0 16px;min-height:52px;
+  border-radius:15px;border:1px solid color-mix(in srgb,var(--c) 46%,transparent);
+  background:linear-gradient(180deg,color-mix(in srgb,var(--c) 20%,transparent),color-mix(in srgb,var(--c) 9%,transparent));
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.10),0 8px 22px rgba(0,0,0,.35);
+  text-align:left;transition:.15s;
+}
+.pod-track i{
+  width:13px;height:13px;border-radius:50%;background:var(--c);flex:none;
+  box-shadow:0 0 12px var(--c);
+}
+.pod-track b{
+  flex:1;min-width:0;font-family:var(--txt);font-size:16px;font-weight:600;color:var(--text);
+  letter-spacing:-.01em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+.pod-track u{
+  text-decoration:none;font-family:var(--mono);font-size:12.5px;color:var(--c);flex:none;
+  padding:3px 9px;border-radius:99px;background:rgba(0,0,0,.28);
+}
+.pod-track::after{content:'▾';color:var(--c);font-size:11px;flex:none;opacity:.8}
+/* a pass of cuts, not a track of notes — different shape, so a glance tells
+   you whether the centre button is about to drop a cut or leave a note */
+.pod-track.tl i{border-radius:2px;transform:rotate(45deg);width:11px;height:11px}
+.pod-track:active{transform:scale(.985);filter:brightness(1.12)}
+
+.pod-handle{
+  flex:none;padding:0 15px;min-height:52px;border-radius:15px;
+  border:1px solid var(--line2);background:rgba(255,255,255,.04);
+  font-family:var(--ui);font-size:13px;color:var(--faint);
+}
+.pod-handle b{font-family:var(--mono);font-size:13.5px;color:var(--text);font-weight:400}
+.pod-handle:active{background:rgba(255,255,255,.09)}
+
+/* the track list */
+.ps-title{
+  font-family:var(--ui);font-size:9px;letter-spacing:.2em;text-transform:uppercase;
+  color:var(--faint);text-align:center;margin-bottom:12px;
+}
+.pt-row{
+  display:flex;align-items:center;gap:12px;width:100%;padding:14px 15px;margin-bottom:8px;
+  border-radius:13px;border:1px solid var(--line);background:rgba(255,255,255,.035);text-align:left;
+}
+.pt-row i{width:11px;height:11px;border-radius:50%;background:var(--pc);flex:none;box-shadow:0 0 10px var(--pc)}
+.pt-row b{flex:1;min-width:0;font-family:var(--txt);font-size:15.5px;font-weight:600;color:var(--dim);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pt-row u{text-decoration:none;font-family:var(--mono);font-size:12px;color:var(--faint)}
+.pt-row.on{border-color:var(--pc);background:color-mix(in srgb,var(--pc) 16%,transparent)}
+.pt-row.on b{color:var(--text)}
+.pt-new{
+  width:100%;padding:14px;border-radius:13px;border:1px dashed var(--line2);
+  font-family:var(--ui);font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:var(--faint);
+}
+.pt-new:active{background:rgba(255,255,255,.05)}
+
+.pod-sheet{
+  position:absolute;inset:0;z-index:3;display:none;align-items:flex-end;
+  background:rgba(8,6,14,.5);backdrop-filter:blur(3px);
+  margin:calc(-12px - env(safe-area-inset-top)) -16px calc(-12px - env(safe-area-inset-bottom));
+}
+.pod-sheet.on{display:flex}
+.ps-card{
+  width:100%;max-height:64%;overflow-y:auto;padding:10px 16px calc(20px + env(safe-area-inset-bottom));
+  border-radius:20px 20px 0 0;border-top:1px solid var(--line2);
+  background:linear-gradient(180deg,rgba(46,41,74,.99),rgba(26,23,42,.99));
+  box-shadow:0 -20px 60px rgba(0,0,0,.6);
+}
+.ps-grab{width:38px;height:4px;border-radius:99px;background:rgba(255,255,255,.22);margin:2px auto 14px}
 
 .pod-pads{display:none}
 
 /* flex:none matters: in a column flex container, flex:1 sets the height, and a
    box with both width and height resolved ignores aspect-ratio — which drew
    the wheel as an ellipse. margin-top:auto still floats it to the bottom. */
+/* A footprint the rest of the column cannot eat into: flex:none plus a cap in
+   dvh, so a long chip row or a full marks list scrolls rather than shoving the
+   wheel through the bottom of the screen. */
 .pod-wheel{
-  flex:none;position:relative;align-self:center;margin-top:auto;
-  width:min(78vw,var(--wheel-max),62vh);aspect-ratio:1;
+  flex:none;position:relative;align-self:center;margin-top:12px;
+  width:min(78vw,var(--wheel-max),44dvh);aspect-ratio:1;
 }
 /* The wheel is a dial, not a grey disc: the arc is how far into the song you
    are, the ticks around the rim are the cuts the drag will catch on, and the
@@ -546,11 +685,14 @@ body.pod .menu,body.pod #top,body.pod #notebar{display:none}
 .pw-dial{
   position:absolute;inset:0;border-radius:50%;pointer-events:none;
   background:conic-gradient(var(--c,var(--cut)) calc(var(--prog) * 360deg),transparent 0);
-  /* inset at both edges so the arc reads as engraved into the rim rather
-     than painted over it */
-  -webkit-mask:radial-gradient(closest-side,transparent 0 80%,#000 81% 95%,transparent 96%);
-  mask:radial-gradient(closest-side,transparent 0 80%,#000 81% 95%,transparent 96%);
-  opacity:.85;filter:saturate(1.1);
+  /* Drawn as a ring hugging the centre button, NOT on the rim. The rim is
+     where the thumb has to land to rotate, and an arc painted there reads as
+     "drag along this edge" — it fought the one gesture the wheel exists for.
+     The button is 46% of the wheel's width, so its edge is at 46% of the
+     radius; the ring sits just outside that and nothing ever touches it. */
+  -webkit-mask:radial-gradient(closest-side,transparent 0 49%,#000 50% 57%,transparent 58%);
+  mask:radial-gradient(closest-side,transparent 0 49%,#000 50% 57%,transparent 58%);
+  opacity:.95;filter:saturate(1.1);
 }
 /* the cuts, around the rim, so the detents are something you can see coming */
 .pw-ticks{position:absolute;inset:0;pointer-events:none}
@@ -563,10 +705,15 @@ body.pod .menu,body.pod #top,body.pod #notebar{display:none}
   transform-origin:50% 50%;
 }
 .pw-ticks i::before{
-  /* on the dial's own track, at the arc's radius, so these read as
-     graduations rather than marks scattered across the face */
-  content:'';position:absolute;left:0;top:6.5%;width:100%;height:8px;border-radius:2px;
-  background:rgba(255,255,255,.55);
+  /* Moved in with the arc. Out on the rim these came out as scattered tally
+     marks at random angles; against the ring they are graduations.
+
+     The bar is full-height and rotated about the centre, so `top` is measured
+     in diameters: a mark at r% of the RADIUS needs top = 50% - r/2. The ring
+     sits at 50–57% of the radius, so 23.5% lands on it. 43% put them at 14%
+     of the radius — behind the centre button, invisible. */
+  content:'';position:absolute;left:0;top:23.5%;width:100%;height:7px;border-radius:2px;
+  background:rgba(255,255,255,.62);
 }
 /* a cut already passed sits under the filled arc, so it becomes a notch cut
    into it rather than a line drawn over it */
@@ -582,21 +729,22 @@ body.pod .menu,body.pod #top,body.pod #notebar{display:none}
 .pw-ring.spin .pw-dial{opacity:1}
 /* held by a cut — the tick you feel on a real wheel, for a screen that
    cannot always buzz (iOS ignores navigator.vibrate entirely) */
-.pw-ring.mag{
-  box-shadow:
-    inset 0 0 0 2px var(--cut),inset 0 1px 0 rgba(255,255,255,.16),
-    0 20px 54px rgba(0,0,0,.6),0 0 42px rgba(143,166,255,.34);
-}
+.pw-ring.mag .pw-dial{box-shadow:none;filter:saturate(1.4) brightness(1.25)}
+.pw-ring.mag{box-shadow:inset 0 1px 0 rgba(255,255,255,.16),0 20px 54px rgba(0,0,0,.6)}
+/* held by a cut: the centre button says so, since that is where the eye is */
+.pw-ring.mag ~ .pw-centre{box-shadow:0 0 0 5px rgba(143,166,255,.30),0 10px 26px rgba(0,0,0,.55)}
+/* 9.5px was unreadable on a real screen and a poor target besides. These sit
+   out on the rim now that the arc has left it — the widest part of the wheel,
+   where there is room to make them big. */
 .pw-q{
-  position:absolute;font-family:var(--ui);font-size:9.5px;letter-spacing:.18em;
+  position:absolute;font-family:var(--ui);font-size:13px;letter-spacing:.16em;
   text-transform:uppercase;color:var(--dim);pointer-events:none;
-  text-shadow:0 1px 3px rgba(0,0,0,.7);
+  text-shadow:0 1px 3px rgba(0,0,0,.75);
 }
-/* clear of the arc band, so a label is never read through a colour */
-.pw-menu{top:24%;left:50%;transform:translateX(-50%)}
-.pw-play{bottom:24%;left:50%;transform:translateX(-50%);font-size:13px;letter-spacing:0}
-.pw-prev{left:22%;top:50%;transform:translateY(-50%);font-size:12px;letter-spacing:0}
-.pw-next{right:22%;top:50%;transform:translateY(-50%);font-size:12px;letter-spacing:0}
+.pw-menu{top:7%;left:50%;transform:translateX(-50%)}
+.pw-play{bottom:6%;left:50%;transform:translateX(-50%);font-size:17px;letter-spacing:0}
+.pw-prev{left:6%;top:50%;transform:translateY(-50%);font-size:16px;letter-spacing:0}
+.pw-next{right:6%;top:50%;transform:translateY(-50%);font-size:16px;letter-spacing:0}
 .pw-ring.press-menu .pw-menu,.pw-ring.press-play .pw-play,
 .pw-ring.press-prev .pw-prev,.pw-ring.press-next .pw-next{color:var(--text)}
 
@@ -667,8 +815,10 @@ body.pod .menu,body.pod #top,body.pod #notebar{display:none}
   .pod-sec{margin:0}
   /* the timeline itself now says where you are, and shows every mark in
      place — the map and the recent list would only be repeating it */
-  .pod-map,.pod-said,.pod-loop{display:none}
-  .pod-recent{display:none}
+  .pod-map,.pod-said{display:none}
+  /* the timeline shows every mark in place, so the list is redundant here —
+     but the loop lives in the sheet now and is wanted on a tablet too */
+  .pod-trackrow{display:none}
 
   .pod-wheel{
     position:absolute;bottom:10px;width:var(--pod-deck);height:var(--pod-deck);
@@ -1905,10 +2055,11 @@ button{touch-action:manipulation;-webkit-tap-highlight-color:transparent}
 </div>
 
 <div id="pod">
+  <div class="pod-top">
   <div class="pod-screen">
+    <button class="pod-src" id="podSrc"><i>♪</i><span id="podSrcName">no audio</span></button>
     <div class="pod-time"><b id="podTime">0:00</b><span id="podTotal">/ 0:00</span></div>
     <div class="pod-sec" id="podSec">—</div>
-    <button class="pod-loop" id="podLoop">⟲ loop section</button>
     <div class="pod-map" id="podMap" aria-hidden="true">
       <canvas id="podWave"></canvas>
       <div class="pm-loop" id="podLoopBar"></div>
@@ -1917,8 +2068,12 @@ button{touch-action:manipulation;-webkit-tap-highlight-color:transparent}
     </div>
     <div class="pod-said" id="podSaid"></div>
   </div>
-  <div class="pod-chips" id="podChips"></div>
-  <div class="pod-recent" id="podRecent"></div>
+  </div>
+  <div class="pod-trackrow">
+    <button class="pod-track" id="podTrack"><i></i><b id="podTrackName">—</b><u id="podTrackN">0</u></button>
+    <button class="pod-handle" id="podHandle">⌃ <b id="podHandleN">0</b></button>
+  </div>
+  <div class="pod-chipwrap"><div class="pod-chips" id="podChips"></div></div>
   <div class="pod-pads" id="podPads"></div>
   <div class="pod-wheel" id="podWheel">
     <!-- the ring is one touch surface: a drag rotates, a tap presses
@@ -1933,9 +2088,32 @@ button{touch-action:manipulation;-webkit-tap-highlight-color:transparent}
       <span class="pw-q pw-next">▶▶</span>
       <span class="pw-q pw-play" id="podPlayGlyph">▶</span>
     </div>
-    <button class="pw-centre" id="podCentre"><b>mark</b><i id="podCentreSub">tap · hold</i></button>
+    <button class="pw-centre" id="podCentre"><b id="podCentreLbl">mark</b><i id="podCentreSub">tap · hold</i></button>
   </div>
   <button class="pod-mirror" id="podMirror" title="Swap which side the wheel is on">⇄</button>
+  <!-- Everything that used to compete with the wheel for the main screen.
+       The wheel stays live underneath, so the song keeps running. -->
+  <div class="pod-sheet" id="podSheet">
+    <div class="ps-card">
+      <div class="ps-grab" aria-hidden="true"></div>
+      <button class="pod-loop" id="podLoop">⟲ loop section</button>
+      <div class="pod-recent" id="podRecent"></div>
+    </div>
+  </div>
+  <!-- Which track a mark lands on. A phone has no pads — those are the
+       landscape console — so without this there was no way to see the armed
+       track, change it, or make a second one. -->
+  <div class="pod-sheet" id="podTracks">
+    <div class="ps-card">
+      <div class="ps-grab" aria-hidden="true"></div>
+      <div class="ps-title">timelines · a pass of cuts</div>
+      <div id="ptTLs"></div>
+      <button class="pt-new" id="ptNewTL">＋ new timeline</button>
+      <div class="ps-title" style="margin-top:20px">tracks · notes on the song</div>
+      <div id="ptList"></div>
+      <button class="pt-new" id="ptNew">＋ new track</button>
+    </div>
+  </div>
 </div>
 
 <div id="ytDock">
@@ -5438,7 +5616,15 @@ function segAt(t) {
    we have to go on, which is what tap-time has always done. */
 const mediaDuration = () => hasYT() ? (yt.dur || 0) : (hasAudio() ? audio.duration : 0);
 function recalc() {
-  const last = P.markers.length ? P.markers[P.markers.length - 1] : 0;
+  /* The song's length is the longest thing in the project, not the longest
+     thing in the timeline you happen to be looking at. Reading only the
+     active one meant starting an empty pass — a drums pass on a 2:15 song —
+     collapsed the whole project to the 4s floor, so there was nowhere left to
+     scrub and every cut landed at the same instant. */
+  const last = (P.timelines || []).reduce((m, t) => {
+    const mk = t.marks || [];
+    return Math.max(m, mk.length ? mk[mk.length - 1] : 0);
+  }, P.markers && P.markers.length ? P.markers[P.markers.length - 1] : 0);
   P.duration = Math.max(last, mediaDuration(), 4);
 }
 /* The nearest cut to t, or t itself if none is within tol — where tol is in
@@ -6558,15 +6744,18 @@ function paintPod() {
   if (sg) {
     const n = el('b'); n.textContent = String(sg[2] + 1).padStart(2, '0');
     sec.append(document.createTextNode('section '), n,
-      document.createTextNode(' · ' + fmt(sg[0]) + '–' + fmt(sg[1]) +
-        (T && !podLandscape() ? '  ·  ' + T.name : '')));
+      /* the track name lives on the pill now, in its own colour — printing it
+         here too put the word "section" beside a track called "Sections" */
+      document.createTextNode(' · ' + fmt(sg[0]) + '–' + fmt(sg[1])));
   } else sec.textContent = '—';
   $('#podPlayGlyph').textContent = playing ? '❚❚' : '▶';
   const sub = $('#podCentreSub');
   if (sub) sub.textContent = podChip ? podChip : 'tap · hold';
   /* the whole mode takes the colour of the track it is about to write to, so
      the control looks like what it does */
-  $('#pod').style.setProperty('--c', (T && T.color) || 'var(--cut)');
+  $('#pod').style.setProperty('--c', podDestColor());
+  paintPodSrc();
+  paintPodTrack();
   podProgress();
 }
 
@@ -6585,25 +6774,59 @@ function podProgress() {
 function paintPodRecent() {
   const box = $('#podRecent'); if (!box) return;
   box.innerHTML = '';
+
+  /* Recording a pass? Then the list is the cuts you have dropped, newest
+     first, each removable — an undo you can aim, which tapping a blank stage
+     never had. */
+  if (podDest === 'timeline') {
+    const marks = (P.markers || []);
+    const n0 = $('#podHandleN'); if (n0) n0.textContent = marks.length;
+    if (!marks.length) {
+      const e = el('div', 'pod-recent-none');
+      e.textContent = 'no cuts yet — press CUT where the song turns';
+      box.appendChild(e);
+      return;
+    }
+    const tl = curTL() || {};
+    marks.map((t, i) => ({ t, i })).reverse().forEach(({ t, i }) => {
+      const r = el('div', 'pod-rec');
+      r.style.setProperty('--pc', tl.color || 'var(--cut)');
+      const dot = el('i'), tm = el('u'), nm = el('b'), x = el('button', 'pod-rec-x');
+      tm.textContent = fmt(t);
+      nm.textContent = 'cut ' + String(i + 1).padStart(2, '0');
+      x.textContent = '✕';
+      x.onclick = ev => {
+        ev.stopPropagation();
+        P.markers.splice(i, 1);
+        recalc(); render(); paintPodRecent(); paintPodSpark(); paintPodTicks(); paintPod(); save();
+      };
+      r.append(dot, tm, nm, x);
+      r.onclick = () => { seek(t); podSheet(false); paintPod(); paintPodTicks(); };
+      box.appendChild(r);
+    });
+    return;
+  }
+
   const tl = (curTL() || {}).id;
   const all = [];
   (curLayer().tracks || []).forEach(T => (T.blocks || []).forEach(b => {
     if (b.tl ? b.tl === tl : true) all.push({ b, T });
   }));
+  const n = $('#podHandleN'); if (n) n.textContent = all.length;
   if (!all.length) {
     const n = el('div', 'pod-recent-none');
     n.textContent = 'nothing marked yet — spin to a moment, then press mark';
     box.appendChild(n);
     return;
   }
-  all.sort((x, y) => y.b.s - x.b.s).slice(0, 5).forEach(({ b, T }) => {
+  all.sort((x, y) => y.b.s - x.b.s).slice(0, 12).forEach(({ b, T }) => {
     const r = el('button', 'pod-rec' + (String(b.text || '').trim() ? '' : ' unnamed'));
     r.style.setProperty('--pc', T.color);
     const dot = el('i'), t = el('u'), tx = el('b');
     t.textContent = fmt(b.s);
     tx.textContent = String(b.text || '').trim() || T.name;
     r.append(dot, t, tx);
-    r.onclick = () => { seek(b.s); paintPod(); paintPodTicks(); };
+    r.onclick = () => { seek(b.s); podSheet(false); paintPod(); paintPodTicks(); };
     box.appendChild(r);
   });
 }
@@ -6710,13 +6933,17 @@ function drawPodMap() {
     g.fillRect(X(s0), 0, Math.max(X(e0) - X(s0), .5), h);
   });
 
-  /* the ribbon, mirrored about a line a little above centre */
+  /* the ribbon, mirrored about a line a little above centre, in the colour of
+     the track being written to — the screen belongs to that track */
   const n = Math.max(24, Math.min(Math.round(w / 2.2), 320));
   const rib = podRibbon(n), mid = h * .46, amp = h * .34;
+  const hex = ((armedTrack() || {}).color || '#8FA6FF').replace('#', '');
+  const rgb = [0, 2, 4].map(i => parseInt(hex.slice(i, i + 2), 16) || 0);
+  const a = v => 'rgba(' + rgb[0] + ',' + rgb[1] + ',' + rgb[2] + ',' + v + ')';
   const grad = g.createLinearGradient(0, mid - amp, 0, mid + amp);
-  grad.addColorStop(0, 'rgba(127,212,224,.70)');
-  grad.addColorStop(.5, 'rgba(143,166,255,.55)');
-  grad.addColorStop(1, 'rgba(140,123,255,.28)');
+  grad.addColorStop(0, a(.85));
+  grad.addColorStop(.55, a(.5));
+  grad.addColorStop(1, a(.18));
   g.fillStyle = grad;
   g.beginPath();
   g.moveTo(0, mid);
@@ -6725,7 +6952,7 @@ function drawPodMap() {
   g.closePath(); g.fill();
 
   /* cuts over the top, as the dividers they are */
-  g.strokeStyle = 'rgba(143,166,255,.55)'; g.lineWidth = 1;
+  g.strokeStyle = 'rgba(255,255,255,.30)'; g.lineWidth = 1;
   (P.markers || []).forEach(t => {
     const x = Math.round(X(t)) + .5;
     g.beginPath(); g.moveTo(x, 0); g.lineTo(x, h); g.stroke();
@@ -6737,8 +6964,12 @@ function drawPodMap() {
   (curLayer().tracks || []).forEach(T => (T.blocks || []).forEach(b => {
     if (b.tl && b.tl !== tl) return;
     g.fillStyle = T.color;
-    g.globalAlpha = String(b.text || '').trim() ? .95 : .45;
-    g.fillRect(X(b.s), h - 7, Math.max(X(b.e) - X(b.s), 2), 4);
+    g.globalAlpha = String(b.text || '').trim() ? 1 : .5;
+    /* a pin rather than a sliver: a stem up from the foot with a head on it,
+       so a mark reads as something someone put there */
+    const x = X(b.s);
+    g.fillRect(x, h - 15, Math.max(X(b.e) - X(b.s), 2.5), 11);
+    g.beginPath(); g.arc(x + 1, h - 15, 3, 0, Math.PI * 2); g.fill();
   }));
   g.globalAlpha = 1;
 }
@@ -6844,6 +7075,19 @@ function podPressEnd() {
   const h = podHold; podHold = null;
   clearTimeout(h.timer);
   h.el.classList.remove('holding');
+  /* a cut is a moment on the timeline, so a hold means nothing extra here —
+     it drops one at the instant the thumb went down, same as a tap */
+  if (podDest === 'timeline' && !h.key) {
+    addCut(h.start);
+    h.el.classList.add('flash');
+    setTimeout(() => h.el.classList.remove('flash'), 400);
+    try { if (navigator.vibrate) navigator.vibrate(12); } catch (err) {}
+    const said = $('#podSaid'); said.innerHTML = '';
+    said.append(document.createTextNode('cut · '));
+    const b = el('b'); b.textContent = fmt(h.start); said.appendChild(b);
+    paintPodSpark(); paintPodTicks(); paintPod();
+    return;
+  }
   const T = podTrack(h.key);
   if (!T) { toast('Add a track first'); return; }
   /* a tap is a moment, a hold is a passage — the end of a held mark is
@@ -6885,6 +7129,133 @@ $('#podPads').addEventListener('pointerup', e => {
   pad.classList.remove('hit');
   podPressEnd();
 });
+
+/* ── which track a mark lands on ──────────────────────
+   The pads are the landscape console; a phone had nothing, so every mark went
+   to whatever setPod() happened to seed and there was no way to see it, change
+   it, or make a second track. */
+/* What the centre button does, and where it goes. A phone works in passes —
+   sections, then drums, then transitions — and each pass is a TIMELINE, not a
+   track. Offering only tracks meant a drums pass could not be started here at
+   all, which is the wrong half of the model. One control answers both: which
+   pass am I on, and does a press drop a cut or leave a note. */
+let podDest = 'track';                   /* 'timeline' = cuts, 'track' = notes */
+
+function podDestName() {
+  if (podDest === 'timeline') { const t = curTL(); return t ? t.name : '—'; }
+  const T = armedTrack(); return T ? T.name : '—';
+}
+function podDestCount() {
+  if (podDest === 'timeline') return (P.markers || []).length;
+  const T = armedTrack(); if (!T) return 0;
+  const tl = (curTL() || {}).id;
+  return (T.blocks || []).filter(b => b.tl ? b.tl === tl : true).length;
+}
+function podDestColor() {
+  if (podDest === 'timeline') { const t = curTL(); return (t && t.color) || 'var(--cut)'; }
+  const T = armedTrack(); return (T && T.color) || 'var(--cut)';
+}
+
+function paintPodTrack() {
+  const n = $('#podTrackName'); if (!n) return;
+  n.textContent = podDestName();
+  $('#podTrackN').textContent = podDestCount();
+  $('#podTrack').classList.toggle('tl', podDest === 'timeline');
+  const lbl = $('#podCentreLbl');
+  if (lbl) lbl.textContent = podDest === 'timeline' ? 'cut' : 'mark';
+}
+
+/* a cut, dropped where the playhead is — the same push the toolbar's
+   "add cut at playhead" does, so a pass recorded here is a pass like any other */
+function addCut(t) {
+  P.markers.push(clamp(t, 0, P.duration));
+  P.markers.sort((a, b) => a - b);
+  recalc(); render(); save();
+}
+function paintPodTrackList() {
+  const tls = $('#ptTLs');
+  if (tls) {
+    tls.innerHTML = '';
+    (P.timelines || []).forEach((t, i) => {
+      const r = el('button', 'pt-row' + (podDest === 'timeline' && i === P.activeTL ? ' on' : ''));
+      r.style.setProperty('--pc', t.color);
+      r.dataset.name = t.name;
+      const dot = el('i'), nm = el('b'), c = el('u');
+      nm.textContent = t.name;
+      const n = (t.marks || []).length;
+      c.textContent = n === 1 ? '1 cut' : n + ' cuts';
+      r.append(dot, nm, c);
+      r.onclick = () => {
+        setActiveTL(i); podDest = 'timeline';
+        podTracks(false); recalc(); render(); paintPod(); paintPodSpark(); paintPodTicks();
+      };
+      tls.appendChild(r);
+    });
+  }
+  const box = $('#ptList'); if (!box) return;
+  box.innerHTML = '';
+  const tl = (curTL() || {}).id, armed = tkey(armedTrack() || {});
+  (curLayer().tracks || []).forEach(T => {
+    const r = el('button', 'pt-row' + (podDest === 'track' && tkey(T) === armed ? ' on' : ''));
+    r.style.setProperty('--pc', T.color);
+    r.dataset.name = T.name;
+    const dot = el('i'), nm = el('b'), c = el('u');
+    nm.textContent = T.name;
+    const n = (T.blocks || []).filter(b => b.tl ? b.tl === tl : true).length;
+    c.textContent = n === 1 ? '1 note' : n + ' notes';
+    r.append(dot, nm, c);
+    r.onclick = () => {
+      armTrack(tkey(T)); podDest = 'track';
+      podTracks(false); paintPod(); paintPodSpark();
+    };
+    box.appendChild(r);
+  });
+}
+function podTracks(on) {
+  $('#podTracks').classList.toggle('on', on);
+  if (on) paintPodTrackList();
+}
+$('#podTrack').onclick = () => podTracks(!$('#podTracks').classList.contains('on'));
+$('#podTracks').onclick = e => { if (e.target.id === 'podTracks') podTracks(false); };
+$('#ptNew').onclick = () => {
+  /* a phone had no route to a second track at all — addTrack names them
+     Track 2, Track 3 … which is renameable later on a bigger screen */
+  addTrack();                              /* returns nothing; the new one is last */
+  const list = curLayer().tracks;
+  armTrack(tkey(list[list.length - 1]));
+  podDest = 'track';
+  podTracks(false); paintPod(); paintPodSpark(); paintPodPads();
+};
+/* A fresh pass in one tap. Recording one here rather than by tapping a blank
+   stage is the point: the wheel's scrub, its detents and the section loop are
+   all to hand, so a cut can be placed, heard back and moved on from. */
+$('#ptNewTL').onclick = () => {
+  addTimeline([], 'Timeline ' + (P.timelines.length + 1));
+  podDest = 'timeline';
+  podTracks(false); recalc(); render();
+  paintPod(); paintPodSpark(); paintPodTicks(); paintPodRecent();
+  toast('Recording into "' + curTL().name + '" — press CUT where it turns');
+};
+
+/* ── the sheet ── */
+function podSheet(on) {
+  $('#podSheet').classList.toggle('on', on);
+  if (on) paintPodRecent();
+}
+$('#podHandle').onclick = () => podSheet(!$('#podSheet').classList.contains('on'));
+$('#podSheet').onclick = e => { if (e.target.id === 'podSheet') podSheet(false); };
+
+/* ── the audio source ── */
+function paintPodSrc() {
+  const n = $('#podSrcName'); if (!n) return;
+  n.textContent = P.ytTitle || P.audioName || (P.ytId ? 'youtube' : 'no audio · tap to add');
+}
+$('#podSrc').onclick = () => {
+  /* ytOpen() is the same panel the toolbar uses; it just needed a way to be
+     asked for, and to come up above the overlay rather than behind it */
+  ytOpen();
+  const u = $('#ytUrl'); if (u) setTimeout(() => u.focus(), 60);
+};
 
 $('#podLoop').onclick = () => {
   if (loopRange) { setLoop(null); return; }
@@ -6929,12 +7300,18 @@ function setPod(on) {
   document.body.classList.toggle('pod-left', on && podLeft);
   if (on) {
     if (noteOpen) closeNote();          /* the keyboard has no business here */
+    /* land on notes if there is already something to note against, and on the
+       pass itself if the timeline is still empty — which is what a fresh
+       drums pass looks like */
+    podDest = (P.markers || []).length > 1 ? 'track' : 'timeline';
     if (liveMode) setLive(false);
-    paintPodChips(); paintPodPads(); paintPodSpark(); paintPodTicks(); paintPodRecent(); paintPod();
+    paintPodChips(); paintPodPads(); paintPodSpark(); paintPodTicks(); paintPodRecent();
+    paintPodTrackList(); paintPod();
     podFullscreen();
   } else {
     if (playing) stopPlay();
     setLoop(null);
+    podSheet(false); podTracks(false);
     podHold = null; podRot = null;
     if (document.fullscreenElement) { try { document.exitFullscreen(); } catch (e) {} }
   }
