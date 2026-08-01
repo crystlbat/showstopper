@@ -1369,10 +1369,7 @@ body.screen-home .menu,body.screen-capture .menu{display:none}
 #hNew .t-ico{position:absolute;right:18px;top:50%;transform:translateY(-50%);width:54px;height:54px;margin:0;opacity:.2}
 #hNew:hover .t-ico{opacity:.42;transform:translateY(-50%) scale(1.06)}
 #hScenes{--accent:var(--t3)}
-#hInbox{--accent:var(--live)}
 #hSync{--accent:var(--t5)}
-/* the inbox only shouts when something is actually in it */
-#hInbox.has{border-color:rgba(232,201,155,.45);background:linear-gradient(180deg,rgba(232,201,155,.1),rgba(255,255,255,.02))}
 
 .home-foot{margin-top:30px;font-family:var(--ui);font-size:9px;letter-spacing:.2em;text-transform:uppercase;color:var(--faint)}
 
@@ -1629,6 +1626,21 @@ body:not(.screen-capture) #capBack,#stage.rec #capBack{display:none}
 .sc-hitem .hdot{width:5px;height:5px;border-radius:50%;background:var(--cut);margin-top:6px;flex:none}
 .sc-hitem .hwhat{font-family:var(--ui);font-size:12px;color:var(--dim)}
 .sc-hitem .hwhen{font-family:var(--mono);font-size:9.5px;color:var(--faint);margin-top:1px}
+/* a row that carries a whole version, not just a line about one */
+.sc-hitem .hbody{flex:1;min-width:0}
+.sc-hitem.has-body .hdot{background:var(--live)}
+.sc-hitem.has-body .hwhat{color:var(--text)}
+/* Under the line it belongs to, not beside it. A project card is a narrow
+   grid cell: alongside the text the button squeezed it into a seven-line
+   column, and stretched into a circle doing it. */
+.h-restore{
+  display:block;margin-top:7px;
+  font-family:var(--ui);font-size:10.5px;color:var(--live);
+  padding:5px 10px;border-radius:99px;
+  border:1px solid color-mix(in srgb,var(--live) 45%,transparent);
+  background:color-mix(in srgb,var(--live) 10%,transparent);
+}
+.h-restore:hover{background:color-mix(in srgb,var(--live) 22%,transparent)}
 .sc-hempty{padding:14px;text-align:center;font-family:var(--ui);font-size:11px;color:var(--faint)}
 .sc-drop{
   position:absolute;right:0;top:34px;z-index:5;min-width:150px;padding:5px;border-radius:9px;
@@ -1898,60 +1910,13 @@ body.cloud #spMainRow{display:flex}
 }
 body.screen-send #top{display:flex}
 
-/* ── inbox: what arrived, in plain language ─────────── */
-.inbox-in{max-width:760px;margin:0 auto;padding:min(9vh,70px) 24px 60px}
+/* shared with the sync page's header row */
 .ib-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px}
 .ib-head .spacer{flex:1}
-.ib-sub{margin:0 0 18px;color:var(--dim);font-size:14px;line-height:1.55}
-.ib-msg{border:1px solid var(--line);border-radius:12px;margin-bottom:8px;background:rgba(255,255,255,.02);overflow:hidden;transition:.15s}
-.ib-msg:hover{border-color:var(--line2)}
-.ib-msg.unread{background:rgba(143,166,255,.06);border-color:rgba(143,166,255,.3)}
-.ib-row{display:flex;align-items:center;gap:12px;padding:15px 16px;cursor:pointer;text-align:left;width:100%}
-.ib-dot{width:8px;height:8px;border-radius:50%;background:transparent;flex:none}
-.ib-msg.unread .ib-dot{background:var(--cut);box-shadow:0 0 10px var(--cut)}
-.ib-main{flex:1;min-width:0}
-.ib-name{font-family:var(--txt);font-size:16px;font-weight:600;letter-spacing:-.012em;display:flex;align-items:center;gap:9px;flex-wrap:wrap}
-.ib-times{
-  font-family:var(--mono);font-size:9px;color:var(--faint);border:1px solid var(--line);
-  border-radius:5px;padding:2px 5px;letter-spacing:0;
-}
-.ib-meta{font-family:var(--mono);font-size:10px;color:var(--faint);margin-top:5px}
-.ib-tag{
-  font-family:var(--ui);font-size:8.5px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;
-  padding:3px 8px;border-radius:20px;border:1px solid currentColor;flex:none;
-}
-.ib-tag.new{color:var(--t3)}
-.ib-tag.updated{color:var(--cut)}
-.ib-tag.both{color:var(--live)}
-.ib-chev{color:var(--faint);font-size:11px;flex:none;transition:transform .18s}
-.ib-msg.open .ib-chev{transform:rotate(90deg)}
-.ib-detail{display:none;padding:0 16px 16px;border-top:1px solid var(--line)}
-.ib-msg.open .ib-detail{display:block}
-.ib-spark{
-  position:relative;height:36px;margin-top:14px;border-radius:8px;overflow:hidden;
-  border:1px solid var(--line);background:rgba(0,0,0,.26);
-}
-.ib-spark i{position:absolute;top:0;bottom:0;width:1.5px;margin-left:-.75px}
-.ib-what{margin:12px 0 0;font-size:13.5px;line-height:1.55;color:var(--dim)}
-.ib-what b{color:var(--text);font-weight:600}
-.ib-diff{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
-.ib-stat{
-  border:1px solid var(--line);border-radius:9px;padding:9px 13px;min-width:88px;
-  background:rgba(0,0,0,.22);
-}
-.ib-stat u{display:block;text-decoration:none;font-family:var(--ui);font-size:8.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--faint)}
-.ib-stat b{font-family:var(--mono);font-size:15px;font-weight:400;color:var(--text);display:block;margin-top:4px}
-.ib-stat i{font-style:normal;font-family:var(--mono);font-size:11px;color:var(--faint)}
-.ib-stat.up b{color:var(--t3)}
-.ib-acts{display:flex;gap:7px;flex-wrap:wrap;margin-top:14px}
-.ib-empty{padding:44px 20px;text-align:center;color:var(--faint)}
-.ib-empty b{display:block;font-family:var(--txt);font-size:17px;font-weight:600;color:var(--dim);margin-bottom:7px;letter-spacing:-.015em}
-.ib-empty span{font-size:13.5px}
 .ib-badge{
   display:inline-block;min-width:18px;padding:1px 6px;border-radius:20px;background:var(--cut);color:var(--ink);
   font-family:var(--ui);font-size:9.5px;font-weight:700;text-align:center;margin-left:8px;letter-spacing:0;
 }
-#hInbox b{display:flex;align-items:center}
 
 /* ── sync log ───────────────────────────────────────── */
 .logs-in{max-width:860px;margin:0 auto;padding:min(9vh,70px) 24px 60px}
@@ -2401,10 +2366,6 @@ button{touch-action:manipulation;-webkit-tap-highlight-color:transparent}
         <svg class="t-ico" viewBox="0 0 24 24" aria-hidden="true"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/><circle class="f" cx="9" cy="6" r="1.9"/><circle class="f" cx="15" cy="12" r="1.9"/><circle class="f" cx="7" cy="18" r="1.9"/></svg>
         <b>Projects</b><span id="hScenesCount">—</span>
       </button>
-      <button class="tile" id="hInbox">
-        <svg class="t-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v10"/><path d="M8 9.5l4 4 4-4"/><line x1="3.5" y1="18.5" x2="20.5" y2="18.5"/></svg>
-        <b>Inbox<span class="ib-badge" id="hInboxBadge" style="display:none">0</span></b><span id="hInboxSub">check for work from your other device</span>
-      </button>
       <button class="tile" id="hSync">
         <svg class="t-ico" viewBox="0 0 24 24" aria-hidden="true"><line x1="3" y1="12" x2="21" y2="12"/><circle class="f" cx="12" cy="12" r="3.2"/></svg>
         <b><span id="hSyncTitle">Sync</span><span class="ib-badge" id="hSyncBadge" style="display:none">!</span></b><span id="hSyncSub">send and get work</span>
@@ -2426,7 +2387,6 @@ button{touch-action:manipulation;-webkit-tap-highlight-color:transparent}
       <button data-f="mine">Created</button>
     </div>
     <span class="spacer"></span>
-    <button class="btn" id="libInbox">Inbox<span class="ib-badge" id="libInboxBadge" style="display:none">0</span></button>
     <button class="btn" id="syncSetup">Sync</button>
   </div>
 
@@ -2646,21 +2606,6 @@ button{touch-action:manipulation;-webkit-tap-highlight-color:transparent}
   </div>
 </div>
 
-<div id="inbox" class="page">
-  <div class="inbox-in">
-    <div class="ib-head">
-      <span class="eyebrow" style="margin-bottom:0">inbox</span>
-      <span class="spacer"></span>
-      <button class="btn key" id="ibPull">Check for new work</button>
-      <button class="btn" id="ibGo">See them in Projects</button>
-      <button class="btn ghost" id="ibReadAll">Mark all read</button>
-      <button class="btn" id="ibClose">Close</button>
-    </div>
-    <p class="ib-sub" id="ibSub">—</p>
-    <div id="ibList"></div>
-  </div>
-</div>
-
 <div id="logs" class="page">
   <div class="logs-in">
     <span class="eyebrow">technical log</span>
@@ -2828,12 +2773,6 @@ function openLogs() { $('#logs').classList.add('on'); paintLogs(); }
 $('#logsClose').onclick = () => $('#logs').classList.remove('on');
 $('#logs').onclick = e => { if (e.target.id === 'logs') $('#logs').classList.remove('on'); };
 $('#logClear').onclick = () => { logs = []; try { localStorage.removeItem(LOGKEY); } catch (e) {} paintLogs(); };
-$('#ibPull').onclick = () => {
-  if (cloud.on) { if (!cloud.user) { closeInbox(); return setupSync(); } return cloudPull(); }
-  if (!srv.on) { closeInbox(); setupSync(); return toast('Connect your sync address first'); }
-  syncPull();
-};
-$('#ibGo').onclick = () => { closeInbox(); go('library'); };
 $('#logPull').onclick = () => cloud.on ? cloudPull() : syncPull();
 $('#logPush').onclick = () => cloud.on ? cloudSave() : syncPush();
 $('#logCopy').onclick = () => {
@@ -3324,247 +3263,11 @@ function claimMine(id) {
 }
 const isMine = id => mineIds.includes(id);
 
-/* ═══ inbox — what a pull actually brought in ══════════════════════════
-   A pull used to be a number in a log. This turns each arrival into a
-   plain-language item you can open, read and act on, so "did my tablet
-   work make it across?" is answered by looking, not by counting bytes. */
-const INBOXKEY = 'tapline.inbox';
-let inbox = [];
-try { const raw = localStorage.getItem(INBOXKEY); if (raw) inbox = JSON.parse(raw) || []; } catch (e) {}
-const saveInbox = () => { try { localStorage.setItem(INBOXKEY, JSON.stringify(inbox)); } catch (e) {} };
-const unreadCount = () => inbox.filter(m => !m.read).length;
-
-/* One row per project. Syncing the same project after three edits used to
-   leave three rows all saying the same thing, and the one arrival that
-   actually needed a decision was buried under them. A repeat arrival now
-   updates the row that is already there rather than stacking on top of it.
-
-   Conflicts are the exception: each fork is a separate copy sitting beside
-   your own, so each keeps its own row until you deal with it. */
-const KIND_RANK = { updated: 0, new: 1, both: 2 };
-const inboxKey = a => a.kind === 'both' ? 'fork:' + a.forkId : 'scene:' + a.sceneId;
-
-/* a project deleted since it arrived has nothing left to open */
-function pruneInbox() {
-  const before = inbox.length;
-  inbox = inbox.filter(x => x.kind === 'both'
-    ? lib.scenes.some(s => s.id === x.forkId && !s.deleted)
-    : lib.scenes.some(s => s.id === x.sceneId && !s.deleted));
-  return before - inbox.length;
-}
-
-function deliver(arrivals) {
-  if (!arrivals || !arrivals.length) return 0;
-  arrivals.forEach(a => {
-    const key = inboxKey(a);
-    const i = inbox.findIndex(x => inboxKey(x) === key);
-    if (i < 0) {
-      inbox.unshift(Object.assign({ id: uid(), ts: Date.now(), read: false, times: 1 }, a));
-      return;
-    }
-    const prev = inbox.splice(i, 1)[0];
-    inbox.unshift(Object.assign({}, prev, a, {
-      /* a conflict must never be downgraded to a plain update, and a project
-         this device had never seen stays "new" until you actually open it */
-      kind: (KIND_RANK[a.kind] || 0) >= (KIND_RANK[prev.kind] || 0) ? a.kind : prev.kind,
-      /* the oldest before, so the diff spans everything you have not looked
-         at rather than only the last hop */
-      before: prev.before || a.before,
-      ts: Date.now(),
-      read: false,
-      times: (prev.times || 1) + 1
-    }));
-  });
-  pruneInbox();
-  while (inbox.length > 60) inbox.pop();
-  saveInbox(); paintInboxBadges();
-  return arrivals.length;
-}
-function paintInboxBadges() {
-  const n = unreadCount();
-  /* the inbox only means anything once there is a second device to receive
-     from — keep it out of the way until sync is connected */
-  const show = srv.on || cloud.on || inbox.length;
-  const hi = $('#hInbox');
-  if (hi) {
-    hi.style.display = show ? 'flex' : 'none';
-    /* it only earns the warm border when something is actually waiting */
-    hi.classList.toggle('has', !!n);
-  }
-  const li = $('#libInbox'); if (li) li.style.display = show ? 'inline-block' : 'none';
-  [['#hInboxBadge', '#hInboxSub'], ['#libInboxBadge', null]].forEach(([bid, sid]) => {
-    const b = $(bid); if (!b) return;
-    b.style.display = n ? 'inline-block' : 'none';
-    b.textContent = n;
-    if (sid) { const s = $(sid); if (s) s.textContent = n ? n + (n === 1 ? ' new arrival' : ' new arrivals') : 'check for work from your other device'; }
-  });
-}
-const IB_COPY = {
-  new:     { tag: 'new', line: 'Wasn\u2019t on this device before.' },
-  updated: { tag: 'updated', line: 'Your copy was behind \u2014 now up to date.' },
-  both:    { tag: 'needs a look', line: '<b>Both versions are here.</b> Pick one and the other goes — on every device.' }
-};
-
-/* Closing a conflict, rather than only looking at it. Until this existed the
-   inbox could open either copy but never put the two back together, so the
-   pair sat in the library for good — which reads as the app having
-   duplicated the project. Whichever version is chosen keeps the original
-   project and its name; the copy that lost is tombstoned rather than quietly
-   dropped, so the other device removes it too instead of handing it back on
-   the next exchange. */
-function resolveFork(m, take) {
-  const mine = lib.scenes.find(s => s.id === m.sceneId);
-  const theirs = lib.scenes.find(s => s.id === m.forkId);
-  const drop = () => { inbox = inbox.filter(x => x.id !== m.id); saveInbox(); paintInbox(); paintInboxBadges(); };
-  if (!mine || mine.deleted || !theirs || theirs.deleted) { drop(); return toast('That project is no longer here'); }
-
-  commitP(curScene(), false);        /* whatever the editor holds, before it changes underneath */
-  const now = Date.now();
-  const past = s => Math.max(now, (s.updated || 0) + 1);
-  if (take === 'theirs') {
-    mine.data = JSON.parse(JSON.stringify(theirs.data));
-    logHist(mine.id, 'Used the copy that arrived');
-  } else {
-    logHist(mine.id, 'Kept this device’s copy');
-  }
-  mine.updated = Math.max(past(mine), past(theirs));
-  theirs.deleted = true; theirs.data = {}; theirs.updated = mine.updated;
-
-  drop();
-  store.set(LIBKEY, lib);
-  syncSoon();
-  closeInbox();
-  loadScene(mine);                   /* reloads P from whichever version won */
-  renderScenes();
-  toast(take === 'theirs' ? 'Updated with the copy that arrived' : 'Kept your version');
-}
-/* a row of ticks beats a sentence for "what does this timeline look like" —
-   same trick the take-compare bars use */
-function cutSpark(marks, dur, color) {
-  const box = el('div', 'ib-spark');
-  (marks || []).forEach(t => {
-    const i = el('i');
-    i.style.left = clamp(t / (dur || 1) * 100, 0, 100) + '%';
-    i.style.background = color;
-    box.appendChild(i);
-  });
-  return box;
-}
-function paintInbox() {
-  const box = $('#ibList'); if (!box) return;
-  const n = unreadCount();
-  /* "4 items need your attention" says nothing about what kind of attention.
-     New work and an edit to something you already have are different
-     errands, so count them separately. */
-  const un = inbox.filter(x => !x.read);
-  const fresh = un.filter(x => x.kind === 'new').length;
-  const edits = un.filter(x => x.kind === 'updated').length;
-  const clash = un.filter(x => x.kind === 'both').length;
-  const bits = [];
-  if (fresh) bits.push(fresh + (fresh === 1 ? ' project is new' : ' projects are new'));
-  if (edits) bits.push(edits + (edits === 1 ? ' has edits' : ' have edits'));
-  if (clash) bits.push(clash + (clash === 1 ? ' needs a look' : ' need a look'));
-  $('#ibSub').textContent = !inbox.length
-    ? 'Anything that arrives from your other device shows up here.'
-    : bits.length ? 'Sync complete — ' + bits.join(' · ') : 'All caught up.';
-  const goBtn = $('#ibGo'); if (goBtn) goBtn.style.display = inbox.length ? 'inline-block' : 'none';
-  box.innerHTML = '';
-  if (!inbox.length) {
-    const e = el('div', 'ib-empty');
-    const b = el('b'); b.textContent = 'Nothing has arrived yet';
-    const s = el('span'); s.textContent = 'Hit “Check for new work” to see what your other device has pushed.';
-    e.append(b, s); box.appendChild(e); return;
-  }
-  inbox.forEach(m => {
-    const copy = IB_COPY[m.kind] || IB_COPY.new;
-    const msg = el('div', 'ib-msg' + (m.read ? '' : ' unread'));
-
-    const row = el('button', 'ib-row');
-    const dot = el('i', 'ib-dot');
-    const main = el('div', 'ib-main');
-    const nm = el('div', 'ib-name');
-    nm.append(document.createTextNode(m.name || 'Untitled'));
-    const tag = el('span', 'ib-tag ' + m.kind); tag.textContent = copy.tag; nm.appendChild(tag);
-    if ((m.times || 1) > 1) { const t = el('span', 'ib-times'); t.textContent = m.times + '×'; nm.appendChild(t); }
-    const meta = el('div', 'ib-meta');
-    meta.textContent = m.after.cuts + ' cuts · ' + m.after.tracks + ' tracks · ' + m.after.notes + ' notes · ' + fmtWhen(m.ts);
-    main.append(nm, meta);
-    const chev = el('span', 'ib-chev'); chev.textContent = '▸';
-    row.append(dot, main, chev);
-    row.onclick = () => {
-      const opening = !msg.classList.contains('open');
-      msg.classList.toggle('open', opening);
-      if (opening && !m.read) { m.read = true; msg.classList.remove('unread'); saveInbox(); paintInboxBadges(); paintInbox(); }
-    };
-
-    const det = el('div', 'ib-detail');
-    if (m.marks && m.marks.length) {
-      const sp = cutSpark(m.marks, m.dur || (m.marks[m.marks.length - 1] + 4),
-        m.kind === 'both' ? 'var(--live)' : 'var(--cut)');
-      det.appendChild(sp);
-    }
-    const what = el('p', 'ib-what'); what.innerHTML = copy.line;
-    det.appendChild(what);
-
-    /* before → after, so "what actually changed" is a glance not a guess */
-    if (m.before) {
-      const diff = el('div', 'ib-diff');
-      [['cuts', 'cuts'], ['tracks', 'tracks'], ['notes', 'notes']].forEach(([k, label]) => {
-        const s = el('div', 'ib-stat' + (m.after[k] > m.before[k] ? ' up' : ''));
-        const u = el('u'); u.textContent = m.kind === 'both' ? 'their ' + label : label;
-        const b = el('b'); b.textContent = m.after[k];
-        const i = el('i'); i.textContent = m.kind === 'both' ? 'yours ' + m.before[k] : 'was ' + m.before[k];
-        s.append(u, b, i); diff.appendChild(s);
-      });
-      det.appendChild(diff);
-    }
-
-    const acts = el('div', 'ib-acts');
-    const has = id => lib.scenes.some(s => s.id === id && !s.deleted);
-    if (m.kind === 'both' && has(m.sceneId) && has(m.forkId)) {
-      /* two projects in the library is the problem, not the offer — these
-         choose, and leave one. Dismiss still means "decide later". */
-      const takeBtn = el('button', 'btn key');
-      takeBtn.textContent = 'Use the one that arrived';
-      takeBtn.onclick = () => resolveFork(m, 'theirs');
-      const keepBtn = el('button', 'btn');
-      keepBtn.textContent = 'Keep mine';
-      keepBtn.onclick = () => resolveFork(m, 'mine');
-      acts.append(takeBtn, keepBtn);
-    } else if (has(m.sceneId)) {
-      const openBtn = el('button', 'btn key');
-      openBtn.textContent = 'Open';
-      openBtn.onclick = () => {
-        const sc = lib.scenes.find(s => s.id === m.sceneId);
-        if (!sc || sc.deleted) return toast('That project is no longer here');
-        closeInbox(); loadScene(sc);
-      };
-      acts.appendChild(openBtn);
-    }
-    const del = el('button', 'btn ghost'); del.textContent = 'Dismiss';
-    del.onclick = () => { inbox = inbox.filter(x => x.id !== m.id); saveInbox(); paintInbox(); paintInboxBadges(); };
-    acts.appendChild(del);
-    det.appendChild(acts);
-
-    msg.append(row, det); box.appendChild(msg);
-  });
-}
-function openInbox() {
-  if (pruneInbox()) { saveInbox(); paintInboxBadges(); }
-  $('#inbox').classList.add('on');
-  paintInbox();
-}
-function closeInbox() { $('#inbox').classList.remove('on'); }
-$('#ibClose').onclick = closeInbox;
-$('#inbox').onclick = e => { if (e.target.id === 'inbox') closeInbox(); };
-$('#ibReadAll').onclick = () => { inbox.forEach(m => m.read = true); saveInbox(); paintInbox(); paintInboxBadges(); };
-$('#hInbox').onclick = () => openInbox();
 $('#hSync').onclick = e => {
   e.stopPropagation();
   if (cloud.on) return cloud.user ? openSyncPop($('#hSync')) : setupSync();
   srv.on ? openSyncPop($('#hSync')) : setupSync();
 };
-$('#libInbox').onclick = () => openInbox();
 
 /* ═══ per-scene edit history — local to this device only, never synced ═══ */
 const HISTKEY = 'tapline.history';
@@ -3573,8 +3276,58 @@ function logHist(sceneId, what) {
   if (!sceneId) return;
   const arr = hist[sceneId] || (hist[sceneId] = []);
   arr.unshift({ ts: Date.now(), what });
-  if (arr.length > 30) arr.length = 30;
+  trimHist(arr);
   store.set(HISTKEY, hist);
+}
+
+/* A project can only ever be one row in the library now, so when a version
+   arriving from another device replaces one that had also moved, the version
+   it replaced has to go somewhere or it is simply gone. It goes here: the
+   same per-project history, with the whole body attached and a way to put it
+   back. Not a second project — a previous version of this one.
+
+   Only the newest few carry a body. The rest of the log is a line of text
+   each; a body is the size of a project, and thirty of them per project in
+   one localStorage/IDB record is how a store starts refusing writes. */
+const HIST_BODIES = 3;
+function trimHist(arr) {
+  if (arr.length > 30) arr.length = 30;
+  let kept = 0;
+  arr.forEach(h => {
+    if (!h.body) return;
+    if (++kept > HIST_BODIES) delete h.body;
+  });
+}
+function keepVersion(sceneId, body, what) {
+  if (!sceneId || !body) return;
+  const arr = hist[sceneId] || (hist[sceneId] = []);
+  arr.unshift({ ts: Date.now(), what, body: JSON.parse(JSON.stringify(body)) });
+  trimHist(arr);
+  store.set(HISTKEY, hist);
+}
+
+/* Putting one back. The restored body becomes the project — restamped, so it
+   is what the next exchange carries to the other devices rather than being
+   overwritten by the version that displaced it in the first place. */
+function restoreVersion(sceneId, ts) {
+  const sc = lib.scenes.find(s => s.id === sceneId);
+  const entry = (hist[sceneId] || []).find(h => h.ts === ts && h.body);
+  if (!sc || !entry) return toast('That version is no longer here');
+  pushUndo('a restore');
+  /* whatever the editor holds, before it changes underneath */
+  commitP(curScene(), false);
+  /* the version being replaced goes into the list too, so a restore is
+     reversible by restoring the other way — otherwise "Restore" is a
+     one-way door and picking the wrong row costs you the right one */
+  keepVersion(sc.id, sc.data, 'your version, before the restore');
+  sc.data = JSON.parse(JSON.stringify(entry.body));
+  sc.updated = Date.now();
+  sc.deleted = false;
+  if (lib.current === sc.id) { loadScene(sc); if (screen === 'edit') { recalc(); render(); updatePos(); } }
+  logHist(sc.id, 'restored the version from ' + fmtWhen(entry.ts));
+  save();
+  renderScenes();
+  toast('Restored — this is the version your other devices will get');
 }
 function fmtWhen(ts) {
   const d = Date.now() - ts;
@@ -3671,7 +3424,6 @@ function paintHome() {
   $('#hSyncSub').textContent = srv.on ? s.txt.toLowerCase() : 'set up to use two devices';
   const sb = $('#hSyncBadge'); if (sb) sb.style.display = (srv.on && (dirty || lastErr)) ? 'inline-block' : 'none';
   $('#hStore').textContent = srv.on ? 'on this device · synced when you ask' : 'stored on this device';
-  paintInboxBadges();
 }
 
 /* ═══ scenes ══════════════════════════════════════════ */
@@ -4052,14 +3804,22 @@ function tidyBlank() {
    flight: a slow request can take several seconds, plenty of time to
    capture more cuts, and a reply describing the world as of when the
    request was *sent* must never stomp on something newer than that. */
-/* Newest-updated wins, EXCEPT when both sides moved since the last sync.
-   Whole-scene last-write-wins is fine for "I edited on one device at a
-   time", but this app's whole workflow is cuts on the tablet, notes on the
-   laptop, back to the tablet — genuinely concurrent edits to one scene.
-   There LWW silently throws away one side's work, so instead of picking a
-   loser we keep the remote copy alongside as a fork and let the user
-   reconcile. Nothing is ever discarded to make the merge tidy. */
-/* keep the inbox preview cheap: a thinned copy of the cut times, not the scene */
+/* ── one project, one row, on every device ──────────────
+   This used to fork: when both sides had moved since the last exchange it
+   kept the local copy and put the remote one in the library beside it as
+   "… (received)". The intent was that nothing should ever be discarded to
+   make the merge tidy — but the effect, every single time it fired, was two
+   rows for one song, and that is what got reported as a bug over and over.
+
+   So the rule is now the plain one the server already applies: newest wins,
+   equal keeps what is here. A project cannot become two projects.
+
+   The version that gives way is not thrown away — it is handed back in
+   `replaced` and absorbScenes files it inside that project's own history,
+   where it can be restored. One file in the library; the other version a tap
+   away inside it, rather than sitting next to it pretending to be a second
+   song. */
+/* a thinned copy of the cut times, cheap enough to keep on an arrival */
 const sparkOf = sc => {
   const m = ((sc.data || {}).markers || []);
   if (m.length <= 120) return m.slice();
@@ -4067,24 +3827,10 @@ const sparkOf = sc => {
   for (let i = 0; i < 120; i++) out.push(m[Math.floor(i * step)]);
   return out;
 };
-/* A fork is only worth making if the version it protects is not already in
-   the library under some other id. Without this the two devices fork the
-   same disagreement from opposite sides — each preserving what the other
-   already preserved — and one conflict breeds copies on every exchange. */
 const bodyOf = s => JSON.stringify((s || {}).data);
-const heldElsewhere = (p, localScenes, incoming) =>
-  localScenes.some(o => o !== p && !o.deleted && bodyOf(o) === bodyOf(p)) ||
-  incoming.some(o => !o.deleted && bodyOf(o) === bodyOf(p));
-
-/* Two projects with one name are two projects you cannot tell apart in the
-   library, which is the whole value of keeping both. */
-const forkName = n => {
-  const s = String(n == null ? '' : n).trim() || 'Project';
-  return /\(received\)$/.test(s) ? s : s + ' (received)';
-};
 
 function mergeScenes(localScenes, incoming, sinceSync) {
-  const m = {}, forks = [], arrivals = [];
+  const m = {}, replaced = [], arrivals = [];
   localScenes.forEach(s => { m[s.id] = s; });
   incoming.forEach(s => {
     const p = m[s.id];
@@ -4093,47 +3839,37 @@ function mergeScenes(localScenes, incoming, sinceSync) {
       if (!s.deleted) arrivals.push({ kind: 'new', sceneId: s.id, name: s.name, after: statsOf(s.data), marks: sparkOf(s), dur: (s.data || {}).duration || 0 });
       return;
     }
+    /* what we hold is newer, or the same — nothing to take */
+    if ((s.updated || 0) < (p.updated || 0)) return;
     const remoteNewer = (s.updated || 0) > (p.updated || 0);
-    const localMovedToo = (p.updated || 0) > (sinceSync || 0);
-    /* Timestamps alone are not a conflict. Saving is automatic now, so
-       `updated` moves on both devices constantly and this used to fork on
-       almost any concurrent activity — leaving two copies of the same song
-       with the same notes in them, which is worse than no merge at all.
-       Fork only when the two versions genuinely differ. */
-    const reallyDiffers = JSON.stringify(p.data) !== JSON.stringify(s.data);
-    if (remoteNewer && localMovedToo && reallyDiffers && !p.deleted && !s.deleted
-        && !heldElsewhere(p, localScenes, incoming)) {
-      const fork = Object.assign({}, s, { id: uid(), name: forkName(s.name) });
-      forks.push(fork); m[fork.id] = fork;
-      /* Keeping the local copy is not enough on its own: it is still the
-         older row of the two, so the very next exchange takes the remote as
-         a plain update and overwrites the work this fork exists to protect.
-         Outranking the remote makes the choice stick, and makes it the
-         version the other device receives. */
-      m[p.id] = Object.assign({}, p, { updated: Math.max(p.updated || 0, s.updated || 0) + 1 });
-      arrivals.push({ kind: 'both', sceneId: p.id, forkId: fork.id, name: p.name,
+    /* Timestamps alone say nothing: saving is automatic, so `updated` moves
+       on both devices constantly and most of what arrives is byte-for-byte
+       what is already here. Only a real difference in the body is worth
+       reporting, and only a real difference can cost anyone work. */
+    if (remoteNewer && !s.deleted && bodyOf(p) !== bodyOf(s)) {
+      arrivals.push({ kind: 'updated', sceneId: s.id, name: s.name,
         before: statsOf(p.data), after: statsOf(s.data), marks: sparkOf(s), dur: (s.data || {}).duration || 0 });
-      return;                       /* local stays put; both survive */
-    }
-    if ((s.updated || 0) >= (p.updated || 0)) {
-      if (remoteNewer && !s.deleted) {
-        arrivals.push({ kind: 'updated', sceneId: s.id, name: s.name,
-          before: statsOf(p.data), after: statsOf(s.data), marks: sparkOf(s), dur: (s.data || {}).duration || 0 });
+      /* Both sides moved since the last exchange and they disagree: this is
+         the case that used to fork. The local body is about to be replaced,
+         so hand it back to be kept. */
+      if (!p.deleted && (p.updated || 0) > (sinceSync || 0)) {
+        replaced.push({ sceneId: p.id, name: p.name, body: p.data,
+          before: statsOf(p.data), after: statsOf(s.data) });
       }
-      m[s.id] = s;
     }
+    m[s.id] = s;
   });
-  return { scenes: Object.keys(m).map(k => m[k]), forks, arrivals };
+  return { scenes: Object.keys(m).map(k => m[k]), replaced, arrivals };
 }
 let syncing = false, lastErr = '', dirty = false, syncGone = false;
 
 /* Everything that happens to the library the moment a set of projects
-   arrives, whoever carried them: merge, refresh the open editor, snapshot,
-   deliver to the inbox. The endpoint-address build and the account build
-   share it, because they differ only in how the bytes travelled and neither
-   should have its own idea of what a merge means. `since` is the last
-   exchange that build knows about, which is what decides whether a project
-   that changed in two places is a conflict. */
+   arrives, whoever carried them: merge, keep whatever gave way, refresh the
+   open editor, snapshot, log. The endpoint-address build and the account
+   build share it, because they differ only in how the bytes travelled and
+   neither should have its own idea of what a merge means. `since` is the
+   last exchange that build knows about, which is what decides whether a
+   project that changed in two places had work worth keeping. */
 function absorbScenes(rawScenes, since) {
   const incoming = (rawScenes || []).map(x => Object.assign({}, x, { data: x.deleted ? {} : migrate(x.data || {}) }));
   const before = lib.scenes.length;
@@ -4141,7 +3877,16 @@ function absorbScenes(rawScenes, since) {
   const newer = incoming.filter(x => { const y = lib.scenes.find(z => z.id === x.id); return y && (x.updated || 0) > (y.updated || 0); }).length;
   const merged = mergeScenes(lib.scenes, incoming, since);
   lib.scenes = merged.scenes;
-  merged.forks.forEach(f => slog('info', 'both devices changed "' + f.name.replace(' (received)', '') + '"', 'kept yours, saved theirs as "' + f.name + '"'));
+  /* Both devices moved this one and they disagreed. The arriving version is
+     now the project — there is only ever one — and the version it displaced
+     is filed inside that project, restorable, instead of appearing beside it
+     in the library as a second song. */
+  merged.replaced.forEach(r => {
+    keepVersion(r.sceneId, r.body, 'your version, before this sync');
+    slog('info', 'both devices changed "' + r.name + '"',
+      'took the newer one; yours is in this project’s history · '
+      + r.before.cuts + ' → ' + r.after.cuts + ' cuts');
+  });
 
   /* What arrives can replace the very project the editor is showing. P is a
      copy taken at load time, so it is now stale — and the next save() would
@@ -4166,9 +3911,17 @@ function absorbScenes(rawScenes, since) {
   store.set(LIBKEY, lib);
   maybeSnapshot();
 
-  /* the whole point of the trip: say what turned up, in the inbox, rather
-     than leaving the user to infer it from counts in a log */
-  const got = deliver(merged.arrivals);
+  /* Say what turned up, in the place it turned up: a line in each project's
+     own history. There is no inbox to go and look in any more, and there
+     does not need to be — the thing that arrived IS the project. */
+  merged.arrivals.forEach(a => {
+    const b = a.before, af = a.after;
+    logHist(a.sceneId, a.kind === 'new'
+      ? 'arrived from another device · ' + af.cuts + ' cuts, ' + af.notes + ' notes'
+      : 'updated from another device · ' + b.cuts + ' → ' + af.cuts + ' cuts, '
+        + b.notes + ' → ' + af.notes + ' notes');
+  });
+  const got = merged.arrivals.length;
   paintSceneName();
   if (screen === 'library') renderScenesIfIdle();
   if (screen === 'home') paintHome();
@@ -4242,7 +3995,7 @@ async function syncXfer(dir) {
     if (push) dirty = false;
     paintSync();
 
-    if (res.got) { openInbox(); toast(res.got === 1 ? '1 new arrival' : res.got + ' new arrivals'); }
+    if (res.got) toast(res.got === 1 ? '1 project updated' : res.got + ' projects updated');
     else toast(push ? 'pushed — the database is up to date' : 'nothing new — you already have it all');
     return true;
   } catch (e) {
@@ -4302,7 +4055,6 @@ function paintSync(err) {
     : 'not linked';
   if (srv.on && !e) st.textContent += dirty ? ' · local changes not pushed' : ' · manual — nothing syncs on its own';
   const hs = $('#hStore'); if (hs) hs.textContent = (isAdmin() && srv.on) ? 'synced with your database when you ask' : 'stored on this device';
-  paintInboxBadges();
   if (typeof screen !== 'undefined' && screen === 'send') paintSend(true);
 }
 function openSync() { closeSyncPop(); $('#sync').classList.add('on'); paintSync(); }
@@ -4553,7 +4305,7 @@ function cloudSignedOut(why) {
    tombstoned server-side the same way a normal delete is, which is also how
    the other devices learn about it. */
 async function openMainOf() {
-  closeSyncPop(); closeInbox();
+  closeSyncPop();
   if (!cloud.on || !cloud.user) return setupSync();
   const page = $('#mainOf');
   page.classList.add('on');
@@ -4639,7 +4391,7 @@ async function cloudPull(quiet) {
     saveCloud();
     slog('ok', 'got your work in ' + (Date.now() - t0) + 'ms',
       'the database had ' + res.incoming + ' · ' + res.gained + ' new · ' + res.newer + ' newer · now ' + lib.scenes.length + ' (was ' + res.before + ')');
-    if (res.got) { openInbox(); toast(res.got === 1 ? '1 new arrival' : res.got + ' new arrivals'); }
+    if (res.got) toast(res.got === 1 ? '1 project updated' : res.got + ' projects updated');
     else if (!quiet) toast('up to date');
     return true;
   } catch (e) {
@@ -4682,7 +4434,7 @@ async function cloudSave(opts) {
     saveCloud();
     slog('ok', 'saved in ' + (Date.now() - t0) + 'ms',
       'the database now holds ' + res.incoming + (res.gained ? ' · ' + res.gained + ' new here' : ''));
-    if (res.got) { openInbox(); toast(res.got === 1 ? '1 new arrival' : res.got + ' new arrivals'); }
+    if (res.got) toast(res.got === 1 ? '1 project updated' : res.got + ' projects updated');
     else if (!opts.quiet) flashSaved();
     return true;
   } catch (e) {
@@ -4787,7 +4539,6 @@ function paintCloud() {
   if (hs) hs.textContent = cloud.user ? 'saved to your account as ' + cloud.user
     : cloud.local ? 'stored on this device' : 'sign in to save your work';
   if ($('#syncPop').classList.contains('on')) paintSyncPop();
-  paintInboxBadges();
   if (typeof screen !== 'undefined' && screen === 'send') paintSend(true);
 }
 
@@ -4812,7 +4563,6 @@ async function cloudBoot() {
   $('#logPull').textContent = 'Get the latest';
   $('#logPush').textContent = 'Save now';
   $('#hSyncTitle').textContent = 'Your account';
-  $('#hInboxSub').textContent = 'what came in from your other device';
   const saved = (await store.get(CKEY)) || {};
   let me = { ok: false, data: {} };
   try { me = await api('/me'); } catch (e) {}
@@ -5065,13 +4815,28 @@ function renderScenes() {
       const entries = hist[sc.id] || [];
       if (!entries.length) { const e2 = el('div', 'sc-hempty'); e2.textContent = 'No changes logged yet on this device'; histBox.appendChild(e2); return; }
       entries.forEach(h => {
-        const item = el('div', 'sc-hitem');
+        const item = el('div', 'sc-hitem' + (h.body ? ' has-body' : ''));
         const d = el('div', 'hdot');
-        const body = el('div');
+        const body = el('div', 'hbody');
         const what = el('div', 'hwhat'); what.textContent = h.what;
         const when = el('div', 'hwhen'); when.textContent = fmtWhen(h.ts);
         body.append(what, when);
         item.append(d, body);
+        /* Rows that carry a whole version can be put back. This is where the
+           copy that used to appear beside the project in the library lives
+           now — inside it, one tap away, instead of pretending to be a
+           second song. */
+        if (h.body) {
+          const rb = el('button', 'h-restore');
+          rb.textContent = 'Restore';
+          rb.title = 'Make this the version of the project, here and on your other devices';
+          rb.onclick = ev => {
+            ev.stopPropagation();
+            if (!confirm('Restore this version of "' + sc.name + '"?\n\nWhat is here now will be kept in this list, so you can swap back.')) return;
+            restoreVersion(sc.id, h.ts);
+          };
+          body.appendChild(rb);
+        }
         histBox.appendChild(item);
       });
     }
@@ -7975,7 +7740,6 @@ addEventListener('keydown', e => {
   const typing = /INPUT|TEXTAREA/.test(e.target.tagName);
   if (e.key === 'Escape') {
     if ($('#pair').classList.contains('on')) { $('#pair').classList.remove('on'); return; }
-    if ($('#inbox').classList.contains('on')) { closeInbox(); return; }
     if ($('#logs').classList.contains('on')) { $('#logs').classList.remove('on'); return; }
     if ($('#keys').classList.contains('on')) { $('#keys').classList.remove('on'); return; }
     if ($('#sync').classList.contains('on')) { closeSync(); return; }
@@ -8458,7 +8222,6 @@ addEventListener('resize', () => { paintPodOffer(); if (podOn) paintPodSpark(); 
      when you want the other device's work. */
   tidyBlank();
   if (screen === 'home') paintHome();
-  paintInboxBadges();
   /* the one network call at boot, and only to find out which build this is —
      cloudBoot logs "ready" for whichever answer comes back */
   cloudBoot();
